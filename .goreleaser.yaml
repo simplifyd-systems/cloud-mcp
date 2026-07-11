@@ -74,10 +74,12 @@ release:
   draft: false
   prerelease: auto
 
-brews:
+homebrew_casks:
   - name: cloud-mcp
     ids:
       - cloud-mcp-archive
+    binaries:
+      - cloud-mcp
     repository:
       owner: simplifyd-systems
       name: homebrew-tap
@@ -85,11 +87,9 @@ brews:
       branch: main
       pull_request:
         enabled: false
-    directory: Formula
+    directory: Casks
+    url:
+      verified: github.com/simplifyd-systems/mcp
     homepage: https://github.com/simplifyd-systems/mcp
-    description: Simplifyd Cloud MCP Server — manage cloud resources via the Model Context Protocol
+    description: Simplifyd Cloud MCP Server - manage cloud resources via the Model Context Protocol
     license: MIT
-    install: |
-      bin.install "cloud-mcp"
-    test: |
-      assert_match version.to_s, shell_output("#{bin}/cloud-mcp --version")
