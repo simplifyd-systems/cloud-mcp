@@ -1,0 +1,95 @@
+version: 2
+
+project_name: cloud-mcp
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cloud-mcp
+    main: .
+    binary: cloud-mcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X main.serverVersion={{.Version}}
+
+universal_binaries:
+  - id: cloud-mcp-universal
+    ids:
+      - cloud-mcp
+    replace: true
+    name_template: cloud-mcp
+
+archives:
+  - id: cloud-mcp-archive
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS
+      {{- else if eq .Os "linux" }}Linux
+      {{- else }}Windows{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    files:
+      - README*
+      - LICENSE*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: simplifyd-systems
+    name: mcp
+  draft: false
+  prerelease: auto
+
+brews:
+  - name: cloud-mcp
+    ids:
+      - cloud-mcp-archive
+    repository:
+      owner: simplifyd-systems
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      branch: main
+      pull_request:
+        enabled: false
+    directory: Formula
+    homepage: https://github.com/simplifyd-systems/mcp
+    description: Simplifyd Cloud MCP Server — manage cloud resources via the Model Context Protocol
+    license: MIT
+    install: |
+      bin.install "cloud-mcp"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/cloud-mcp --version")
