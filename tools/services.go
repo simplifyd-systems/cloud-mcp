@@ -235,7 +235,16 @@ func handleAddServiceVariable(
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	v, err := services(args.Workspace, args.Project, args.Env).Variables(args.Service).Set(ctx, args.Name, args.Value)
+	vars := services(args.Workspace, args.Project, args.Env).Variables(args.Service)
+	// Upsert: the API's create endpoint rejects duplicate names.
+	if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
+		v, err := vars.Update(ctx, slug, args.Value)
+		if err != nil {
+			return apiErr("update service variable", err), nil, nil
+		}
+		return jsonText(v), nil, nil
+	}
+	v, err := vars.Set(ctx, args.Name, args.Value)
 	if err != nil {
 		return apiErr("add service variable", err), nil, nil
 	}
@@ -260,7 +269,8 @@ func handleDeleteServiceVariable(
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Variables(args.Service).Delete(ctx, args.Variable); err != nil {
+	vars := services(args.Workspace, args.Project, args.Env).Variables(args.Service)
+	if err := vars.Delete(ctx, resolveVariableSlug(ctx, vars.List, args.Variable)); err != nil {
 		return apiErr("delete service variable", err), nil, nil
 	}
 	return text("Service variable deleted successfully"), nil, nil

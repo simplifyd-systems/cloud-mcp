@@ -133,7 +133,16 @@ func handleCreateEnvVariable(
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	v, err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables().Set(ctx, args.Name, args.Value)
+	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	// Upsert: the API's create endpoint rejects duplicate names.
+	if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
+		v, err := vars.Update(ctx, slug, args.Value)
+		if err != nil {
+			return apiErr("update environment variable", err), nil, nil
+		}
+		return jsonText(v), nil, nil
+	}
+	v, err := vars.Set(ctx, args.Name, args.Value)
 	if err != nil {
 		return apiErr("create environment variable", err), nil, nil
 	}
@@ -158,7 +167,8 @@ func handleUpdateEnvVariable(
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	v, err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables().Update(ctx, args.Variable, args.Value)
+	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	v, err := vars.Update(ctx, resolveVariableSlug(ctx, vars.List, args.Variable), args.Value)
 	if err != nil {
 		return apiErr("update environment variable", err), nil, nil
 	}
@@ -182,7 +192,8 @@ func handleDeleteEnvVariable(
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	if err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables().Delete(ctx, args.Variable); err != nil {
+	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	if err := vars.Delete(ctx, resolveVariableSlug(ctx, vars.List, args.Variable)); err != nil {
 		return apiErr("delete environment variable", err), nil, nil
 	}
 	return text("Variable deleted successfully"), nil, nil
