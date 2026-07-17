@@ -369,19 +369,60 @@ type tcpProxyArgs struct {
 	Port      uint   `json:"port"       jsonschema:"Container port to expose via TCP proxy"`
 }
 
+type addTCPProxyArgs struct {
+	Workspace           string   `json:"workspace"                       jsonschema:"Workspace slug"`
+	Project             string   `json:"project"                         jsonschema:"Project slug"`
+	Env                 string   `json:"env"                             jsonschema:"Environment slug"`
+	Service             string   `json:"service"                         jsonschema:"Service slug"`
+	Port                uint     `json:"port"                            jsonschema:"Container port to expose via TCP proxy"`
+	AllowedSourceRanges []string `json:"allowed_source_ranges,omitempty" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty means open to all"`
+}
+
 func handleAddTCPProxy(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
-	args tcpProxyArgs,
+	args addTCPProxyArgs,
 ) (*mcp.CallToolResult, any, error) {
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
 	}
-	result, err := services(args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port)
+	result, err := services(args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port, args.AllowedSourceRanges...)
 	if err != nil {
 		return apiErr("add TCP proxy", err), nil, nil
 	}
 	return jsonText(result), nil, nil
+}
+
+// ---- set-ingress-source-ranges ----
+
+type setIngressSourceRangesArgs struct {
+	Workspace           string   `json:"workspace"             jsonschema:"Workspace slug"`
+	Project             string   `json:"project"               jsonschema:"Project slug"`
+	Env                 string   `json:"env"                   jsonschema:"Environment slug"`
+	Service             string   `json:"service"               jsonschema:"Service slug"`
+	Ingress             string   `json:"ingress"               jsonschema:"Ingress port slug (from get-service ingress list)"`
+	AllowedSourceRanges []string `json:"allowed_source_ranges" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty list opens the port to all IPs"`
+}
+
+func handleSetIngressSourceRanges(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	args setIngressSourceRangesArgs,
+) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	ranges := args.AllowedSourceRanges
+	if ranges == nil {
+		ranges = []string{}
+	}
+	if err := services(args.Workspace, args.Project, args.Env).Ingress(args.Service).SetSourceRanges(ctx, args.Ingress, ranges); err != nil {
+		return apiErr("set ingress source ranges", err), nil, nil
+	}
+	if len(ranges) == 0 {
+		return text("IP allowlist cleared — port is open to all IPs"), nil, nil
+	}
+	return text(fmt.Sprintf("IP allowlist updated: %d range(s); applies to the live LoadBalancer without a redeploy", len(ranges))), nil, nil
 }
 
 // ---- delete-tcp-proxy ----
@@ -572,8 +613,13 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "add-tcp-proxy",
-		Description: "Add a TCP proxy to expose a service port externally.",
+		Description: "Add a TCP proxy to expose a service port externally. Optionally restrict which client IPs/CIDRs may connect.",
 	}, handleAddTCPProxy)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "set-ingress-source-ranges",
+		Description: "Set (replace) the client IP allowlist on a TCP/UDP ingress port's public LoadBalancer. Empty list opens the port to all IPs. Applies live, no redeploy needed.",
+	}, handleSetIngressSourceRanges)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "delete-tcp-proxy",
