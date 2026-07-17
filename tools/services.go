@@ -554,6 +554,55 @@ func handleDiscardChangeset(
 	return text("Pending changeset discarded"), nil, nil
 }
 
+// ---- cross-project private access ----
+
+type grantPrivateAccessArgs struct {
+	Workspace       string `json:"workspace"       jsonschema:"Workspace slug"`
+	Project         string `json:"project"         jsonschema:"Destination service project slug"`
+	Env             string `json:"env"             jsonschema:"Destination service environment slug"`
+	Service         string `json:"service"         jsonschema:"Destination service slug"`
+	ConsumerProject string `json:"consumer_project" jsonschema:"Consumer project slug in the same workspace"`
+	Protocol        string `json:"protocol"        jsonschema:"Private protocol: TCP or UDP"`
+	Port            uint   `json:"port"            jsonschema:"Destination private port, 1-65535"`
+}
+
+func handleGrantPrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args grantPrivateAccessArgs) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	grant, err := services(args.Workspace, args.Project, args.Env).CreatePrivateAccessGrant(ctx, args.Service, cloud.CreatePrivateAccessGrantInput{ConsumerProject: args.ConsumerProject, Protocol: args.Protocol, Port: args.Port})
+	if err != nil {
+		return apiErr("grant private service access", err), nil, nil
+	}
+	return jsonText(grant), nil, nil
+}
+
+func handleListPrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args svcArgs) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	grants, err := services(args.Workspace, args.Project, args.Env).ListPrivateAccessGrants(ctx, args.Service)
+	if err != nil {
+		return apiErr("list private service access", err), nil, nil
+	}
+	return jsonText(grants), nil, nil
+}
+
+type revokePrivateAccessArgs struct {
+	svcArgs
+	Grant string `json:"grant" jsonschema:"Private access grant slug"`
+}
+
+func handleRevokePrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args revokePrivateAccessArgs) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	if err := services(args.Workspace, args.Project, args.Env).DeletePrivateAccessGrant(ctx, args.Service, args.Grant); err != nil {
+		return apiErr("revoke private service access", err), nil, nil
+	}
+	return text("Private service access revoked; the live network policy is removed without a redeploy"), nil, nil
+}
+
 // RegisterServiceTools registers all service-related MCP tools on s.
 func RegisterServiceTools(s *mcp.Server) {
 	mcp.AddTool(s, &mcp.Tool{
@@ -580,6 +629,10 @@ func RegisterServiceTools(s *mcp.Server) {
 		Name:        "delete-service",
 		Description: "Delete a service and all its resources.",
 	}, handleDeleteService)
+
+	mcp.AddTool(s, &mcp.Tool{Name: "list-private-service-access", Description: "List cross-project grants for a destination service, including consumer project, protocol, and port."}, handleListPrivateServiceAccess)
+	mcp.AddTool(s, &mcp.Tool{Name: "grant-private-service-access", Description: "Allow services in another project in the same workspace to connect to one TCP/UDP port on this service over its private hostname. Applies live without a redeploy."}, handleGrantPrivateServiceAccess)
+	mcp.AddTool(s, &mcp.Tool{Name: "revoke-private-service-access", Description: "Revoke a cross-project private service access grant. Applies live without a redeploy."}, handleRevokePrivateServiceAccess)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list-service-variables",
