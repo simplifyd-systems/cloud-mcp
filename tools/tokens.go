@@ -36,7 +36,7 @@ type createTokenArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
 	Project   string `json:"project"    jsonschema:"Project slug"`
 	Name      string `json:"name"       jsonschema:"Display name for the token (e.g. CI/CD Token)"`
-	Env       string `json:"env"        jsonschema:"Environment slug this token grants access to"`
+	Env       string `json:"env,omitempty" jsonschema:"Optional environment slug; omit for access to all environments in the project"`
 }
 
 func handleCreateToken(
@@ -85,7 +85,7 @@ func RegisterTokenTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-token",
-		Description: "Create a new project API token scoped to a specific environment. The full key is returned only once.",
+		Description: "Create a project API token. Omit env for all project environments, or provide env to restrict it. The full key is returned only once.",
 	}, handleCreateToken)
 
 	mcp.AddTool(s, &mcp.Tool{
