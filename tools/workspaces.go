@@ -280,7 +280,7 @@ func handleGetRegistryCredentials(
 	if err != nil {
 		return apiErr("get registry credentials", err), nil, nil
 	}
-	return jsonText(creds), nil, nil
+	return jsonTextRaw(creds), nil, nil
 }
 
 func handleListRegistryRepos(
@@ -367,7 +367,7 @@ func RegisterWorkspaceTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get-registry-credentials",
-		Description: "Get push/pull credentials for the workspace container registry (for docker login).",
+		Description: "Explicitly reveal push/pull username, password, and credential data for docker login. Treat the response as secret.",
 	}, handleGetRegistryCredentials)
 
 	mcp.AddTool(s, &mcp.Tool{

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"time"
 
@@ -130,6 +131,12 @@ type deploymentLogsArgs struct {
 	MaxLines   int    `json:"max_lines,omitempty"  jsonschema:"Maximum log lines to return (default 500)"`
 }
 
+const (
+	defaultLogLines = 500
+	maximumLogLines = 2000
+	maximumLogBytes = 256 * 1024
+)
+
 func handleGetDeploymentLogs(
 	ctx context.Context,
 	_ *mcp.CallToolRequest,
@@ -140,7 +147,10 @@ func handleGetDeploymentLogs(
 	}
 	maxLines := args.MaxLines
 	if maxLines <= 0 {
-		maxLines = 500
+		maxLines = defaultLogLines
+	}
+	if maxLines > maximumLogLines {
+		maxLines = maximumLogLines
 	}
 	// The logs endpoint streams indefinitely; bound the snapshot with a timeout.
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -153,7 +163,28 @@ func handleGetDeploymentLogs(
 	if len(lines) == 0 {
 		return text("(no log output)"), nil, nil
 	}
-	return text(strings.Join(lines, "\n")), nil, nil
+	output := redactLogOutput(strings.Join(lines, "\n"))
+	if len(output) > maximumLogBytes {
+		output = strings.ToValidUTF8(output[:maximumLogBytes], "") + "\n[output truncated]"
+	}
+	return text(output), nil, nil
+}
+
+var logSecretPatterns = []struct {
+	re          *regexp.Regexp
+	replacement string
+}{
+	{regexp.MustCompile(`(?i)(authorization\s*[:=]\s*(?:bearer\s+)?)[^\s,;]+`), `${1}[REDACTED]`},
+	{regexp.MustCompile(`(?i)((?:password|passwd|secret|secret[_-]?key|api[_-]?key|token|access[_-]?token|refresh[_-]?token)\s*[:=]\s*)[^\s,;]+`), `${1}[REDACTED]`},
+	{regexp.MustCompile(`(?i)(postgres(?:ql)?|mysql|redis)://([^:@/\s]+):([^@/\s]+)@`), `${1}://${2}:[REDACTED]@`},
+	{regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`), `[REDACTED PRIVATE KEY]`},
+}
+
+func redactLogOutput(output string) string {
+	for _, pattern := range logSecretPatterns {
+		output = pattern.re.ReplaceAllString(output, pattern.replacement)
+	}
+	return output
 }
 
 // RegisterDeploymentTools registers all deployment-related MCP tools on s.

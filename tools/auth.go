@@ -36,13 +36,20 @@ func handleLogin(
 			Env:       resp.ActiveEnv,
 		},
 	}
-	_ = client.SaveConfig(cfg) // best-effort
+	saveErr := client.SaveConfig(cfg)
 
-	return text(fmt.Sprintf(
+	message := fmt.Sprintf(
 		"Logged in as %s\nActive workspace: %s | project: %s | env: %s\nToken saved to ~/.simplifyd/config.json",
 		args.Email,
 		resp.ActiveWorkspace, resp.ActiveProject, resp.ActiveEnv,
-	)), nil, nil
+	)
+	if saveErr != nil {
+		message = fmt.Sprintf(
+			"Logged in as %s\nActive workspace: %s | project: %s | env: %s\nWarning: login succeeded for this session, but the token could not be saved.",
+			args.Email, resp.ActiveWorkspace, resp.ActiveProject, resp.ActiveEnv,
+		)
+	}
+	return text(message), nil, nil
 }
 
 // ---- get-me ----

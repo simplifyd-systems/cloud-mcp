@@ -24,7 +24,11 @@ builds:
         goarch: arm64
     ldflags:
       - -s -w
+      - -buildid=
       - -X main.serverVersion={{.Version}}
+    flags:
+      - -trimpath
+      - -buildvcs=false
 
 universal_binaries:
   - id: cloud-mcp-universal

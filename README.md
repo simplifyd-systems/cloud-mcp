@@ -1,8 +1,8 @@
 # Simplifyd Cloud MCP Server
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server for the Simplifyd Cloud platform, built with Go and the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk).
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server for the Simplifyd Cloud platform.
 
-It exposes 60 tools spanning the full Simplifyd Cloud API over a stdio transport, making it compatible with Claude Code, Claude Desktop, Cursor, and any other MCP-enabled client. All API calls go through the shared [cloud-go-sdk](https://github.com/simplifyd-systems/cloud-go-sdk) (the same client the `edge` CLI uses), so API payloads stay in sync automatically.
+It exposes tools for managing Simplifyd Cloud resources from MCP-enabled clients.
 
 ## Tools
 
@@ -61,20 +61,8 @@ Or if you prefer to authenticate interactively (omit `SIMPLIFYD_API_TOKEN` and r
 }
 ```
 
-## Architecture
+## Security
 
-```
-mcp/
-├── main.go              # Entry point — creates server, registers tools, runs stdio transport
-├── client/
-│   └── client.go        # Auth/config: token resolution + persistence (~/.simplifyd/config.json)
-└── tools/               # Thin MCP wrappers over the cloud-go-sdk
-    ├── helpers.go        # Shared utilities (text/JSON responses, auth check, error helpers)
-    ├── auth.go           # login, get-me
-    ├── workspaces.go     # Workspace management + billing
-    ├── projects.go       # Project CRUD
-    ├── environments.go   # Environment + variable management
-    ├── services.go       # Service CRUD, variables, ingress, TCP proxy, configs, changesets
-    ├── deployments.go    # Deploy, redeploy, undeploy, logs
-    └── tokens.go         # API token management
-```
+Normal resource responses omit variable values, passwords, connection URLs, credential blobs, and config-file contents. Tools whose descriptions say they explicitly reveal credentials return sensitive data by design; use them only when needed and avoid copying their output into logs or tickets.
+
+Deployment logs are filtered for common credential patterns, but applications can emit secrets in unexpected formats. Review log output before sharing it.

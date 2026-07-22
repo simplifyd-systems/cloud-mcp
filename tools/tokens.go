@@ -51,7 +51,7 @@ func handleCreateToken(
 	if err != nil {
 		return apiErr("create token", err), nil, nil
 	}
-	return jsonText(token), nil, nil
+	return jsonTextRaw(token), nil, nil
 }
 
 // ---- delete-token ----
@@ -85,7 +85,7 @@ func RegisterTokenTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-token",
-		Description: "Create a project API token. Omit env for all project environments, or provide env to restrict it. The full key is returned only once.",
+		Description: "Create a project API token. This explicitly reveals the full secret key once. Omit env for all project environments, or provide env to restrict it.",
 	}, handleCreateToken)
 
 	mcp.AddTool(s, &mcp.Tool{
