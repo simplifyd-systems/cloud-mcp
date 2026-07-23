@@ -123,17 +123,19 @@ func handleCreateService(
 // ---- update-service ----
 
 type updateServiceArgs struct {
-	Workspace    string `json:"workspace"                jsonschema:"Workspace slug"`
-	Project      string `json:"project"                  jsonschema:"Project slug"`
-	Env          string `json:"env"                      jsonschema:"Environment slug"`
-	Service      string `json:"service"                  jsonschema:"Service slug"`
-	Action       string `json:"action"                   jsonschema:"What to update: name, vcpus, memory, image, or start_command"`
-	Name         string `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
-	VCPUs        uint   `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
-	Memory       uint   `json:"memory,omitempty"         jsonschema:"Memory in MiB (action: memory)"`
-	Image        string `json:"image,omitempty"          jsonschema:"Docker image without tag, e.g. nginx (action: image)"`
-	Tag          string `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
-	StartCommand string `json:"start_command,omitempty"  jsonschema:"Container start command (action: start_command)"`
+	Workspace        string   `json:"workspace"                jsonschema:"Workspace slug"`
+	Project          string   `json:"project"                  jsonschema:"Project slug"`
+	Env              string   `json:"env"                      jsonschema:"Environment slug"`
+	Service          string   `json:"service"                  jsonschema:"Service slug"`
+	Action           string   `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, or start_command"`
+	Name             string   `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
+	VCPUs            uint     `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
+	Replicas         uint     `json:"replicas,omitempty"       jsonschema:"Number of Docker service replicas, 1-10 (action: replicas)"`
+	Memory           uint     `json:"memory,omitempty"         jsonschema:"Memory in MiB (action: memory)"`
+	Image            string   `json:"image,omitempty"          jsonschema:"Docker image without tag, e.g. nginx (action: image)"`
+	Tag              string   `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
+	StartCommand     string   `json:"start_command,omitempty"       jsonschema:"Container executable (action: start_command)"`
+	StartCommandArgs []string `json:"start_command_args,omitempty"  jsonschema:"Ordered arguments passed directly to the container executable (action: start_command)"`
 }
 
 func handleUpdateService(
@@ -145,13 +147,15 @@ func handleUpdateService(
 		return r, nil, nil
 	}
 	svc, err := services(args.Workspace, args.Project, args.Env).Update(ctx, args.Service, cloud.UpdateServiceInput{
-		Action:       args.Action,
-		Name:         args.Name,
-		VCPUs:        args.VCPUs,
-		Memory:       args.Memory,
-		Image:        args.Image,
-		Tag:          args.Tag,
-		StartCommand: args.StartCommand,
+		Action:           args.Action,
+		Name:             args.Name,
+		VCPUs:            args.VCPUs,
+		Replicas:         args.Replicas,
+		Memory:           args.Memory,
+		Image:            args.Image,
+		Tag:              args.Tag,
+		StartCommand:     args.StartCommand,
+		StartCommandArgs: args.StartCommandArgs,
 	})
 	if err != nil {
 		return apiErr("update service", err), nil, nil
@@ -622,7 +626,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update-service",
-		Description: "Update one aspect of a service via its changeset: name, vcpus, memory, image, or start_command (set the matching field for the chosen action). Changes are staged and applied on the next deploy (or via approve-service-changeset).",
+		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, or start_command (set the matching field for the chosen action). Replica scaling supports Docker services with 1-10 replicas. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
 	}, handleUpdateService)
 
 	mcp.AddTool(s, &mcp.Tool{
