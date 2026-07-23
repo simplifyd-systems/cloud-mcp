@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	cloud "github.com/simplifyd-systems/cloud-go-sdk"
@@ -65,18 +66,19 @@ func handleGetService(
 // ---- create-service ----
 
 type createServiceArgs struct {
-	Workspace     string  `json:"workspace"    jsonschema:"Workspace slug"`
-	Project       string  `json:"project"      jsonschema:"Project slug"`
-	Env           string  `json:"env"          jsonschema:"Environment slug"`
-	Name          string  `json:"name"         jsonschema:"Service display name"`
-	Type          string  `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, or s3_bucket"`
-	Image         string  `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
-	Tag           string  `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
-	StorageGB     *uint64 `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres and redis types, 1-1000)"`
-	Mode          string  `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
-	RedisReplicas *int    `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
-	BucketName    string  `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
-	BucketRegion  string  `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
+	Workspace      string            `json:"workspace"    jsonschema:"Workspace slug"`
+	Project        string            `json:"project"      jsonschema:"Project slug"`
+	Env            string            `json:"env"          jsonschema:"Environment slug"`
+	Name           string            `json:"name"         jsonschema:"Service display name"`
+	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, or s3_bucket"`
+	Image          string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
+	Tag            string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
+	StorageGB      *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres and redis types, 1-1000)"`
+	Mode           string            `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
+	RedisReplicas  *int              `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
+	BucketName     string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
+	BucketRegion   string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
+	ReadinessProbe *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
 }
 
 func handleCreateService(
@@ -91,9 +93,16 @@ func handleCreateService(
 		Name: args.Name,
 		Type: cloud.ServiceType(args.Type),
 	}
+	if args.ReadinessProbe != nil && in.Type != cloud.ServiceTypeDocker {
+		return text("readiness_probe is only supported for docker services"), nil, nil
+	}
 	switch in.Type {
 	case cloud.ServiceTypeDocker:
-		in.Docker = &cloud.DockerInput{Image: args.Image, Tag: args.Tag}
+		probe, probeErr := readinessProbeFromArgs(args.ReadinessProbe)
+		if probeErr != nil {
+			return text(probeErr.Error()), nil, nil
+		}
+		in.Docker = &cloud.DockerInput{Image: args.Image, Tag: args.Tag, ReadinessProbe: probe}
 	case cloud.ServiceTypePostgres:
 		pg := &cloud.PostgresInput{Mode: args.Mode}
 		if args.StorageGB != nil {
@@ -123,19 +132,69 @@ func handleCreateService(
 // ---- update-service ----
 
 type updateServiceArgs struct {
-	Workspace        string   `json:"workspace"                jsonschema:"Workspace slug"`
-	Project          string   `json:"project"                  jsonschema:"Project slug"`
-	Env              string   `json:"env"                      jsonschema:"Environment slug"`
-	Service          string   `json:"service"                  jsonschema:"Service slug"`
-	Action           string   `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, or start_command"`
-	Name             string   `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
-	VCPUs            uint     `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
-	Replicas         uint     `json:"replicas,omitempty"       jsonschema:"Number of Docker service replicas, 1-10 (action: replicas)"`
-	Memory           uint     `json:"memory,omitempty"         jsonschema:"Memory in MiB (action: memory)"`
-	Image            string   `json:"image,omitempty"          jsonschema:"Docker image without tag, e.g. nginx (action: image)"`
-	Tag              string   `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
-	StartCommand     string   `json:"start_command,omitempty"       jsonschema:"Container executable (action: start_command)"`
-	StartCommandArgs []string `json:"start_command_args,omitempty"  jsonschema:"Ordered arguments passed directly to the container executable (action: start_command)"`
+	Workspace        string            `json:"workspace"                jsonschema:"Workspace slug"`
+	Project          string            `json:"project"                  jsonschema:"Project slug"`
+	Env              string            `json:"env"                      jsonschema:"Environment slug"`
+	Service          string            `json:"service"                  jsonschema:"Service slug"`
+	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, readiness_probe, or delete_readiness_probe"`
+	Name             string            `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
+	VCPUs            uint              `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
+	Replicas         uint              `json:"replicas,omitempty"       jsonschema:"Number of Docker service replicas, 1-10 (action: replicas)"`
+	Memory           uint              `json:"memory,omitempty"         jsonschema:"Memory in MiB (action: memory)"`
+	Image            string            `json:"image,omitempty"          jsonschema:"Docker image without tag, e.g. nginx (action: image)"`
+	Tag              string            `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
+	StartCommand     string            `json:"start_command,omitempty"       jsonschema:"Container executable (action: start_command)"`
+	StartCommandArgs []string          `json:"start_command_args,omitempty"  jsonschema:"Ordered arguments passed directly to the container executable (action: start_command)"`
+	Probe            *serviceProbeArgs `json:"probe,omitempty" jsonschema:"HTTP readiness probe configuration (required for action: readiness_probe)"`
+}
+
+type serviceProbeArgs struct {
+	Path                string `json:"path"                  jsonschema:"Absolute HTTP path beginning with /"`
+	Port                uint   `json:"port"                  jsonschema:"Container port, 1-65535"`
+	InitialDelaySeconds int32  `json:"initial_delay_seconds,omitempty" jsonschema:"Seconds before the first probe, default 0"`
+	PeriodSeconds       int32  `json:"period_seconds,omitempty"        jsonschema:"Seconds between probes, default 10"`
+	TimeoutSeconds      int32  `json:"timeout_seconds,omitempty"       jsonschema:"Probe timeout in seconds, default 1"`
+	FailureThreshold    int32  `json:"failure_threshold,omitempty"     jsonschema:"Consecutive failures before unready, default 3"`
+	SuccessThreshold    int32  `json:"success_threshold,omitempty"     jsonschema:"Consecutive successes before ready, default 1"`
+}
+
+func readinessProbeFromArgs(input *serviceProbeArgs) (*cloud.ServiceProbe, error) {
+	if input == nil {
+		return nil, nil
+	}
+	if !strings.HasPrefix(input.Path, "/") {
+		return nil, fmt.Errorf("probe.path must be an absolute HTTP path beginning with /")
+	}
+	if input.Port < 1 || input.Port > 65535 {
+		return nil, fmt.Errorf("probe.port must be between 1 and 65535")
+	}
+	if input.InitialDelaySeconds < 0 || input.PeriodSeconds < 0 ||
+		input.TimeoutSeconds < 0 || input.FailureThreshold < 0 ||
+		input.SuccessThreshold < 0 {
+		return nil, fmt.Errorf("probe timing and threshold values cannot be negative")
+	}
+	probe := &cloud.ServiceProbe{
+		Path:                input.Path,
+		Port:                input.Port,
+		InitialDelaySeconds: input.InitialDelaySeconds,
+		PeriodSeconds:       input.PeriodSeconds,
+		TimeoutSeconds:      input.TimeoutSeconds,
+		FailureThreshold:    input.FailureThreshold,
+		SuccessThreshold:    input.SuccessThreshold,
+	}
+	if probe.PeriodSeconds == 0 {
+		probe.PeriodSeconds = 10
+	}
+	if probe.TimeoutSeconds == 0 {
+		probe.TimeoutSeconds = 1
+	}
+	if probe.FailureThreshold == 0 {
+		probe.FailureThreshold = 3
+	}
+	if probe.SuccessThreshold == 0 {
+		probe.SuccessThreshold = 1
+	}
+	return probe, nil
 }
 
 func handleUpdateService(
@@ -145,6 +204,15 @@ func handleUpdateService(
 ) (*mcp.CallToolResult, any, error) {
 	if r, ok := requireAuth(); !ok {
 		return r, nil, nil
+	}
+	if args.Action == "readiness_probe" {
+		if args.Probe == nil {
+			return text("probe is required for action readiness_probe"), nil, nil
+		}
+	}
+	probe, probeErr := readinessProbeFromArgs(args.Probe)
+	if probeErr != nil {
+		return text(probeErr.Error()), nil, nil
 	}
 	svc, err := services(args.Workspace, args.Project, args.Env).Update(ctx, args.Service, cloud.UpdateServiceInput{
 		Action:           args.Action,
@@ -156,6 +224,7 @@ func handleUpdateService(
 		Tag:              args.Tag,
 		StartCommand:     args.StartCommand,
 		StartCommandArgs: args.StartCommandArgs,
+		Probe:            probe,
 	})
 	if err != nil {
 		return apiErr("update service", err), nil, nil
@@ -621,12 +690,12 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, redis, http_gateway, or s3_bucket) in an environment.",
+		Description: "Create a new service (docker, postgres, redis, http_gateway, or s3_bucket) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy.",
 	}, handleCreateService)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "update-service",
-		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, or start_command (set the matching field for the chosen action). Replica scaling supports Docker services with 1-10 replicas. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
+		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables native rolling deployments; without one deployments use Recreate. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
 	}, handleUpdateService)
 
 	mcp.AddTool(s, &mcp.Tool{
