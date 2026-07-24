@@ -63,6 +63,23 @@ func handleGetService(
 	return jsonText(svc), nil, nil
 }
 
+// ---- create-postgres-backup ----
+
+func handleCreatePostgresBackup(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	args svcArgs,
+) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	run, err := services(args.Workspace, args.Project, args.Env).CreatePostgresBackup(ctx, args.Service)
+	if err != nil {
+		return apiErr("create postgres backup", err), nil, nil
+	}
+	return jsonText(run), nil, nil
+}
+
 // ---- create-service ----
 
 type createServiceArgs struct {
@@ -687,6 +704,11 @@ func RegisterServiceTools(s *mcp.Server) {
 		Name:        "get-service",
 		Description: "Get full details of a specific service including its status, config, variables, and ingress rules.",
 	}, handleGetService)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "create-postgres-backup",
+		Description: "Start an on-demand base backup for a Postgres service. Use before risky migrations or other operations that require a fresh recovery base. The service must already have a valid backup destination configured.",
+	}, handleCreatePostgresBackup)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-service",
