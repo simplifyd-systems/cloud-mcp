@@ -80,6 +80,55 @@ func handleCreatePostgresBackup(
 	return jsonText(run), nil, nil
 }
 
+type postgresParametersArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Project   string `json:"project"   jsonschema:"Project slug"`
+	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug"`
+}
+
+func handleGetPostgresParameters(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	args postgresParametersArgs,
+) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	parameters, err := services(args.Workspace, args.Project, args.Env).GetPostgresParameters(ctx, args.Service)
+	if err != nil {
+		return apiErr("get PostgreSQL parameters", err), nil, nil
+	}
+	return jsonText(parameters), nil, nil
+}
+
+type updatePostgresParametersArgs struct {
+	Workspace  string            `json:"workspace"  jsonschema:"Workspace slug"`
+	Project    string            `json:"project"    jsonschema:"Project slug"`
+	Env        string            `json:"env"        jsonschema:"Environment slug"`
+	Service    string            `json:"service"    jsonschema:"Managed PostgreSQL service slug"`
+	Parameters map[string]string `json:"parameters" jsonschema:"Complete replacement map of supported PostgreSQL parameter names to string values; use an empty map to restore platform defaults"`
+}
+
+func handleUpdatePostgresParameters(
+	ctx context.Context,
+	_ *mcp.CallToolRequest,
+	args updatePostgresParametersArgs,
+) (*mcp.CallToolResult, any, error) {
+	if r, ok := requireAuth(); !ok {
+		return r, nil, nil
+	}
+	parameters, err := services(args.Workspace, args.Project, args.Env).UpdatePostgresParameters(
+		ctx,
+		args.Service,
+		cloud.UpdatePostgresParametersInput{Parameters: args.Parameters},
+	)
+	if err != nil {
+		return apiErr("update PostgreSQL parameters", err), nil, nil
+	}
+	return jsonText(parameters), nil, nil
+}
+
 // ---- create-service ----
 
 type createServiceArgs struct {
@@ -709,6 +758,16 @@ func RegisterServiceTools(s *mcp.Server) {
 		Name:        "create-postgres-backup",
 		Description: "Start an on-demand base backup for a Postgres service. Use before risky migrations or other operations that require a fresh recovery base. The service must already have a valid backup destination configured.",
 	}, handleCreatePostgresBackup)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "get-postgres-parameters",
+		Description: "Get customer-controlled PostgreSQL server parameters and the platform allowlist for a managed Postgres service.",
+	}, handleGetPostgresParameters)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "update-postgres-parameters",
+		Description: "Replace the complete customer-controlled PostgreSQL parameter map for a managed Postgres service. Values are validated against a platform allowlist; an empty map restores platform defaults. Deploy the service afterward to apply changes.",
+	}, handleUpdatePostgresParameters)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-service",
