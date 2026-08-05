@@ -18,9 +18,10 @@ type svcArgs struct {
 	Service   string `json:"service"   jsonschema:"Service slug"`
 }
 
-// services returns a ServicesClient scoped to the given workspace/project/env.
-func services(workspace, project, env string) *cloud.ServicesClient {
-	return sdk().Workspace(workspace).Project(project).Env(env).Services()
+// services returns a ServicesClient scoped to the given workspace/project/env,
+// built from the caller's client for this request.
+func services(api *cloud.Client, workspace, project, env string) *cloud.ServicesClient {
+	return api.Workspace(workspace).Project(project).Env(env).Services()
 }
 
 // ---- list-services ----
@@ -33,13 +34,14 @@ type listServicesArgs struct {
 
 func handleListServices(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args listServicesArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	svcs, err := services(args.Workspace, args.Project, args.Env).List(ctx)
+	svcs, err := services(api, args.Workspace, args.Project, args.Env).List(ctx)
 	if err != nil {
 		return apiErr("list services", err), nil, nil
 	}
@@ -50,13 +52,14 @@ func handleListServices(
 
 func handleGetService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	svc, err := services(args.Workspace, args.Project, args.Env).Get(ctx, args.Service)
+	svc, err := services(api, args.Workspace, args.Project, args.Env).Get(ctx, args.Service)
 	if err != nil {
 		return apiErr("get service", err), nil, nil
 	}
@@ -67,13 +70,14 @@ func handleGetService(
 
 func handleCreatePostgresBackup(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	run, err := services(args.Workspace, args.Project, args.Env).CreatePostgresBackup(ctx, args.Service)
+	run, err := services(api, args.Workspace, args.Project, args.Env).CreatePostgresBackup(ctx, args.Service)
 	if err != nil {
 		return apiErr("create postgres backup", err), nil, nil
 	}
@@ -89,13 +93,14 @@ type postgresParametersArgs struct {
 
 func handleGetPostgresParameters(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args postgresParametersArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	parameters, err := services(args.Workspace, args.Project, args.Env).GetPostgresParameters(ctx, args.Service)
+	parameters, err := services(api, args.Workspace, args.Project, args.Env).GetPostgresParameters(ctx, args.Service)
 	if err != nil {
 		return apiErr("get PostgreSQL parameters", err), nil, nil
 	}
@@ -112,13 +117,14 @@ type updatePostgresParametersArgs struct {
 
 func handleUpdatePostgresParameters(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updatePostgresParametersArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	parameters, err := services(args.Workspace, args.Project, args.Env).UpdatePostgresParameters(
+	parameters, err := services(api, args.Workspace, args.Project, args.Env).UpdatePostgresParameters(
 		ctx,
 		args.Service,
 		cloud.UpdatePostgresParametersInput{Parameters: args.Parameters},
@@ -136,7 +142,7 @@ type createServiceArgs struct {
 	Project        string            `json:"project"      jsonschema:"Project slug"`
 	Env            string            `json:"env"          jsonschema:"Environment slug"`
 	Name           string            `json:"name"         jsonschema:"Service display name"`
-	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, or s3_bucket"`
+	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
 	Image          string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
 	Tag            string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
 	StorageGB      *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres and redis types, 1-1000)"`
@@ -149,10 +155,11 @@ type createServiceArgs struct {
 
 func handleCreateService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createServiceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
 	in := cloud.CreateServiceInput{
@@ -186,9 +193,11 @@ func handleCreateService(
 		in.Redis = redis
 	case cloud.ServiceTypeS3Bucket:
 		in.S3Bucket = &cloud.S3BucketInput{Name: args.BucketName, Region: args.BucketRegion}
+	case cloud.ServiceTypeStaticSite:
+		in.StaticSite = &cloud.StaticSiteInput{Name: args.Name}
 	}
 
-	svc, err := services(args.Workspace, args.Project, args.Env).Create(ctx, in)
+	svc, err := services(api, args.Workspace, args.Project, args.Env).Create(ctx, in)
 	if err != nil {
 		return apiErr("create service", err), nil, nil
 	}
@@ -265,10 +274,11 @@ func readinessProbeFromArgs(input *serviceProbeArgs) (*cloud.ServiceProbe, error
 
 func handleUpdateService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateServiceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
 	if args.Action == "readiness_probe" {
@@ -280,7 +290,7 @@ func handleUpdateService(
 	if probeErr != nil {
 		return text(probeErr.Error()), nil, nil
 	}
-	svc, err := services(args.Workspace, args.Project, args.Env).Update(ctx, args.Service, cloud.UpdateServiceInput{
+	svc, err := services(api, args.Workspace, args.Project, args.Env).Update(ctx, args.Service, cloud.UpdateServiceInput{
 		Action:           args.Action,
 		Name:             args.Name,
 		VCPUs:            args.VCPUs,
@@ -302,13 +312,14 @@ func handleUpdateService(
 
 func handleDeleteService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Delete(ctx, args.Service); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Delete(ctx, args.Service); err != nil {
 		return apiErr("delete service", err), nil, nil
 	}
 	return text("Service deleted successfully"), nil, nil
@@ -318,13 +329,14 @@ func handleDeleteService(
 
 func handleListServiceVariables(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars, err := services(args.Workspace, args.Project, args.Env).Variables(args.Service).List(ctx)
+	vars, err := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service).List(ctx)
 	if err != nil {
 		return apiErr("list service variables", err), nil, nil
 	}
@@ -343,13 +355,14 @@ type setServiceVariablesArgs struct {
 
 func handleSetServiceVariables(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args setServiceVariablesArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Variables(args.Service).BulkSet(ctx, args.Variables); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service).BulkSet(ctx, args.Variables); err != nil {
 		return apiErr("set service variables", err), nil, nil
 	}
 	return text("Service variables updated successfully"), nil, nil
@@ -368,13 +381,14 @@ type addSvcVarArgs struct {
 
 func handleAddServiceVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addSvcVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars := services(args.Workspace, args.Project, args.Env).Variables(args.Service)
+	vars := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service)
 	// Upsert: the API's create endpoint rejects duplicate names.
 	if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
 		v, err := vars.Update(ctx, slug, args.Value)
@@ -402,13 +416,14 @@ type deleteSvcVarArgs struct {
 
 func handleDeleteServiceVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deleteSvcVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars := services(args.Workspace, args.Project, args.Env).Variables(args.Service)
+	vars := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service)
 	if err := vars.Delete(ctx, resolveVariableSlug(ctx, vars.List, args.Variable)); err != nil {
 		return apiErr("delete service variable", err), nil, nil
 	}
@@ -427,13 +442,14 @@ type addSharedVarArgs struct {
 
 func handleAddSharedVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addSharedVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Variables(args.Service).AddShared(ctx, args.Variable); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service).AddShared(ctx, args.Variable); err != nil {
 		return apiErr("add shared variable", err), nil, nil
 	}
 	return text("Shared variable linked successfully"), nil, nil
@@ -453,17 +469,18 @@ type addIngressArgs struct {
 
 func handleAddServiceIngress(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addIngressArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
 	protocol := args.Protocol
 	if protocol == "" {
 		protocol = "http"
 	}
-	ingress, err := services(args.Workspace, args.Project, args.Env).Ingress(args.Service).Add(ctx, cloud.AddIngressInput{
+	ingress, err := services(api, args.Workspace, args.Project, args.Env).Ingress(args.Service).Add(ctx, cloud.AddIngressInput{
 		Protocol:   protocol,
 		Port:       args.Port,
 		CustomFQDN: args.CustomFQDN,
@@ -486,13 +503,14 @@ type deleteIngressArgs struct {
 
 func handleDeleteServiceIngress(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deleteIngressArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Ingress(args.Service).DeleteFQDN(ctx, args.FQDN); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Ingress(args.Service).DeleteFQDN(ctx, args.FQDN); err != nil {
 		return apiErr("delete service ingress", err), nil, nil
 	}
 	return text(fmt.Sprintf("Ingress for %s removed successfully", args.FQDN)), nil, nil
@@ -519,13 +537,14 @@ type addTCPProxyArgs struct {
 
 func handleAddTCPProxy(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addTCPProxyArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	result, err := services(args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port, args.AllowedSourceRanges...)
+	result, err := services(api, args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port, args.AllowedSourceRanges...)
 	if err != nil {
 		return apiErr("add TCP proxy", err), nil, nil
 	}
@@ -545,17 +564,18 @@ type setIngressSourceRangesArgs struct {
 
 func handleSetIngressSourceRanges(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args setIngressSourceRangesArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
 	ranges := args.AllowedSourceRanges
 	if ranges == nil {
 		ranges = []string{}
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Ingress(args.Service).SetSourceRanges(ctx, args.Ingress, ranges); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Ingress(args.Service).SetSourceRanges(ctx, args.Ingress, ranges); err != nil {
 		return apiErr("set ingress source ranges", err), nil, nil
 	}
 	if len(ranges) == 0 {
@@ -568,13 +588,14 @@ func handleSetIngressSourceRanges(
 
 func handleDeleteTCPProxy(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args tcpProxyArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).DeleteTCPProxy(ctx, args.Service, args.Port); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).DeleteTCPProxy(ctx, args.Service, args.Port); err != nil {
 		return apiErr("delete TCP proxy", err), nil, nil
 	}
 	return text("TCP proxy removed successfully"), nil, nil
@@ -594,13 +615,14 @@ type addConfigArgs struct {
 
 func handleAddServiceConfig(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addConfigArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	cfg, err := services(args.Workspace, args.Project, args.Env).Configs(args.Service).Create(ctx, cloud.CreateConfigInput{
+	cfg, err := services(api, args.Workspace, args.Project, args.Env).Configs(args.Service).Create(ctx, cloud.CreateConfigInput{
 		Name:      args.Name,
 		Content:   args.Content,
 		MountPath: args.MountPath,
@@ -624,13 +646,14 @@ type updateConfigArgs struct {
 
 func handleUpdateServiceConfig(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateConfigArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	cfg, err := services(args.Workspace, args.Project, args.Env).Configs(args.Service).Update(ctx, args.Config, cloud.UpdateConfigInput{
+	cfg, err := services(api, args.Workspace, args.Project, args.Env).Configs(args.Service).Update(ctx, args.Config, cloud.UpdateConfigInput{
 		Name:      args.Name,
 		Content:   args.Content,
 		MountPath: args.MountPath,
@@ -651,13 +674,14 @@ type deleteConfigArgs struct {
 
 func handleDeleteServiceConfig(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deleteConfigArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Configs(args.Service).Delete(ctx, args.Config); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Configs(args.Service).Delete(ctx, args.Config); err != nil {
 		return apiErr("delete service config", err), nil, nil
 	}
 	return text("Service config deleted successfully"), nil, nil
@@ -667,13 +691,14 @@ func handleDeleteServiceConfig(
 
 func handleApproveChangeset(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).ApproveChangeset(ctx, args.Service); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).ApproveChangeset(ctx, args.Service); err != nil {
 		return apiErr("approve changeset", err), nil, nil
 	}
 	return text("Pending changeset approved"), nil, nil
@@ -681,13 +706,14 @@ func handleApproveChangeset(
 
 func handleDiscardChangeset(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).DiscardChangeset(ctx, args.Service); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).DiscardChangeset(ctx, args.Service); err != nil {
 		return apiErr("discard changeset", err), nil, nil
 	}
 	return text("Pending changeset discarded"), nil, nil
@@ -705,22 +731,24 @@ type grantPrivateAccessArgs struct {
 	Port            uint   `json:"port"            jsonschema:"Destination private port, 1-65535"`
 }
 
-func handleGrantPrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args grantPrivateAccessArgs) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+func handleGrantPrivateServiceAccess(ctx context.Context, req *mcp.CallToolRequest, args grantPrivateAccessArgs) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	grant, err := services(args.Workspace, args.Project, args.Env).CreatePrivateAccessGrant(ctx, args.Service, cloud.CreatePrivateAccessGrantInput{ConsumerProject: args.ConsumerProject, Protocol: args.Protocol, Port: args.Port})
+	grant, err := services(api, args.Workspace, args.Project, args.Env).CreatePrivateAccessGrant(ctx, args.Service, cloud.CreatePrivateAccessGrantInput{ConsumerProject: args.ConsumerProject, Protocol: args.Protocol, Port: args.Port})
 	if err != nil {
 		return apiErr("grant private service access", err), nil, nil
 	}
 	return jsonText(grant), nil, nil
 }
 
-func handleListPrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args svcArgs) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+func handleListPrivateServiceAccess(ctx context.Context, req *mcp.CallToolRequest, args svcArgs) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	grants, err := services(args.Workspace, args.Project, args.Env).ListPrivateAccessGrants(ctx, args.Service)
+	grants, err := services(api, args.Workspace, args.Project, args.Env).ListPrivateAccessGrants(ctx, args.Service)
 	if err != nil {
 		return apiErr("list private service access", err), nil, nil
 	}
@@ -732,11 +760,12 @@ type revokePrivateAccessArgs struct {
 	Grant string `json:"grant" jsonschema:"Private access grant slug"`
 }
 
-func handleRevokePrivateServiceAccess(ctx context.Context, _ *mcp.CallToolRequest, args revokePrivateAccessArgs) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+func handleRevokePrivateServiceAccess(ctx context.Context, req *mcp.CallToolRequest, args revokePrivateAccessArgs) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).DeletePrivateAccessGrant(ctx, args.Service, args.Grant); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).DeletePrivateAccessGrant(ctx, args.Service, args.Grant); err != nil {
 		return apiErr("revoke private service access", err), nil, nil
 	}
 	return text("Private service access revoked; the live network policy is removed without a redeploy"), nil, nil
@@ -771,7 +800,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, redis, http_gateway, or s3_bucket) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy.",
+		Description: "Create a new service (docker, postgres, redis, http_gateway, s3_bucket, or static_site) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
 	mcp.AddTool(s, &mcp.Tool{

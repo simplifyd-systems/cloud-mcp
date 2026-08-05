@@ -11,13 +11,14 @@ import (
 
 func handleListWorkspaces(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	_ struct{},
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	workspaces, err := sdk().ListWorkspaces(ctx)
+	workspaces, err := api.ListWorkspaces(ctx)
 	if err != nil {
 		return apiErr("list workspaces", err), nil, nil
 	}
@@ -32,13 +33,14 @@ type workspaceSlugArgs struct {
 
 func handleGetWorkspace(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	ws, err := sdk().Workspace(args.Workspace).Get(ctx)
+	ws, err := api.Workspace(args.Workspace).Get(ctx)
 	if err != nil {
 		return apiErr("get workspace", err), nil, nil
 	}
@@ -53,13 +55,14 @@ type createWorkspaceArgs struct {
 
 func handleCreateWorkspace(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createWorkspaceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	ws, err := sdk().CreateWorkspace(ctx, args.Name)
+	ws, err := api.CreateWorkspace(ctx, args.Name)
 	if err != nil {
 		return apiErr("create workspace", err), nil, nil
 	}
@@ -75,13 +78,14 @@ type updateWorkspaceArgs struct {
 
 func handleUpdateWorkspace(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateWorkspaceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	ws, err := sdk().Workspace(args.Workspace).Update(ctx, args.Name)
+	ws, err := api.Workspace(args.Workspace).Update(ctx, args.Name)
 	if err != nil {
 		return apiErr("update workspace", err), nil, nil
 	}
@@ -92,13 +96,14 @@ func handleUpdateWorkspace(
 
 func handleGetWorkspaceUsage(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	usage, err := sdk().Workspace(args.Workspace).Usage(ctx)
+	usage, err := api.Workspace(args.Workspace).Usage(ctx)
 	if err != nil {
 		return apiErr("get workspace usage", err), nil, nil
 	}
@@ -109,13 +114,14 @@ func handleGetWorkspaceUsage(
 
 func handleGetWorkspaceTransactions(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	txns, err := sdk().Workspace(args.Workspace).Transactions(ctx)
+	txns, err := api.Workspace(args.Workspace).Transactions(ctx)
 	if err != nil {
 		return apiErr("get workspace transactions", err), nil, nil
 	}
@@ -126,13 +132,14 @@ func handleGetWorkspaceTransactions(
 
 func handleGetMyRole(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	role, err := sdk().Workspace(args.Workspace).MyRole(ctx)
+	role, err := api.Workspace(args.Workspace).MyRole(ctx)
 	if err != nil {
 		return apiErr("get my role", err), nil, nil
 	}
@@ -143,13 +150,14 @@ func handleGetMyRole(
 
 func handleListWorkspaceMembers(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	members, err := sdk().Workspace(args.Workspace).Members().List(ctx)
+	members, err := api.Workspace(args.Workspace).Members().List(ctx)
 	if err != nil {
 		return apiErr("list workspace members", err), nil, nil
 	}
@@ -166,13 +174,14 @@ type addWorkspaceMemberArgs struct {
 
 func handleAddWorkspaceMember(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args addWorkspaceMemberArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	members := sdk().Workspace(args.Workspace).Members()
+	members := api.Workspace(args.Workspace).Members()
 	var err error
 	if args.Role != "" {
 		err = members.AddWithRole(ctx, args.Emails, args.Role)
@@ -195,13 +204,14 @@ type updateMemberRoleArgs struct {
 
 func handleUpdateMemberRole(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateMemberRoleArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := sdk().Workspace(args.Workspace).Members().UpdateRole(ctx, args.MemberID, args.Role); err != nil {
+	if err := api.Workspace(args.Workspace).Members().UpdateRole(ctx, args.MemberID, args.Role); err != nil {
 		return apiErr("update member role", err), nil, nil
 	}
 	return text("Member role updated successfully"), nil, nil
@@ -216,13 +226,14 @@ type removeWorkspaceMemberArgs struct {
 
 func handleRemoveWorkspaceMember(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args removeWorkspaceMemberArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := sdk().Workspace(args.Workspace).Members().Remove(ctx, args.MemberID); err != nil {
+	if err := api.Workspace(args.Workspace).Members().Remove(ctx, args.MemberID); err != nil {
 		return apiErr("remove workspace member", err), nil, nil
 	}
 	return text("Member removed successfully"), nil, nil
@@ -238,13 +249,14 @@ type fundWorkspaceArgs struct {
 
 func handleFundWorkspace(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args fundWorkspaceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	result, err := sdk().Workspace(args.Workspace).Fund(ctx, args.Method, args.Amount)
+	result, err := api.Workspace(args.Workspace).Fund(ctx, args.Method, args.Amount)
 	if err != nil {
 		return apiErr("fund workspace", err), nil, nil
 	}
@@ -255,13 +267,14 @@ func handleFundWorkspace(
 
 func handleGetRegistry(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	reg, err := sdk().Workspace(args.Workspace).Registry().Get(ctx)
+	reg, err := api.Workspace(args.Workspace).Registry().Get(ctx)
 	if err != nil {
 		return apiErr("get registry", err), nil, nil
 	}
@@ -270,13 +283,14 @@ func handleGetRegistry(
 
 func handleGetRegistryCredentials(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	creds, err := sdk().Workspace(args.Workspace).Registry().Credentials(ctx)
+	creds, err := api.Workspace(args.Workspace).Registry().Credentials(ctx)
 	if err != nil {
 		return apiErr("get registry credentials", err), nil, nil
 	}
@@ -285,13 +299,14 @@ func handleGetRegistryCredentials(
 
 func handleListRegistryRepos(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args workspaceSlugArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	repos, err := sdk().Workspace(args.Workspace).Registry().ListRepos(ctx)
+	repos, err := api.Workspace(args.Workspace).Registry().ListRepos(ctx)
 	if err != nil {
 		return apiErr("list registry repos", err), nil, nil
 	}

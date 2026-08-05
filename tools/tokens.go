@@ -17,13 +17,14 @@ type tokenListArgs struct {
 
 func handleListTokens(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args tokenListArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	tokens, err := sdk().Workspace(args.Workspace).Project(args.Project).Tokens().List(ctx)
+	tokens, err := api.Workspace(args.Workspace).Project(args.Project).Tokens().List(ctx)
 	if err != nil {
 		return apiErr("list tokens", err), nil, nil
 	}
@@ -41,13 +42,14 @@ type createTokenArgs struct {
 
 func handleCreateToken(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createTokenArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	token, err := sdk().Workspace(args.Workspace).Project(args.Project).Tokens().Create(ctx, args.Name, args.Env)
+	token, err := api.Workspace(args.Workspace).Project(args.Project).Tokens().Create(ctx, args.Name, args.Env)
 	if err != nil {
 		return apiErr("create token", err), nil, nil
 	}
@@ -64,13 +66,14 @@ type deleteTokenArgs struct {
 
 func handleDeleteToken(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deleteTokenArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := sdk().Workspace(args.Workspace).Project(args.Project).Tokens().Delete(ctx, args.Token); err != nil {
+	if err := api.Workspace(args.Workspace).Project(args.Project).Tokens().Delete(ctx, args.Token); err != nil {
 		return apiErr("delete token", err), nil, nil
 	}
 	return text("Token revoked successfully"), nil, nil

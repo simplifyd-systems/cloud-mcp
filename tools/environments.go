@@ -15,13 +15,14 @@ type envListArgs struct {
 
 func handleListEnvironments(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args envListArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	envs, err := sdk().Workspace(args.Workspace).Project(args.Project).ListEnvs(ctx)
+	envs, err := api.Workspace(args.Workspace).Project(args.Project).ListEnvs(ctx)
 	if err != nil {
 		return apiErr("list environments", err), nil, nil
 	}
@@ -38,13 +39,14 @@ type envArgs struct {
 
 func handleGetEnvironment(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args envArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	env, err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Get(ctx)
+	env, err := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Get(ctx)
 	if err != nil {
 		return apiErr("get environment", err), nil, nil
 	}
@@ -61,13 +63,14 @@ type createEnvArgs struct {
 
 func handleCreateEnvironment(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createEnvArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	env, err := sdk().Workspace(args.Workspace).Project(args.Project).CreateEnv(ctx, args.Name)
+	env, err := api.Workspace(args.Workspace).Project(args.Project).CreateEnv(ctx, args.Name)
 	if err != nil {
 		return apiErr("create environment", err), nil, nil
 	}
@@ -85,13 +88,14 @@ type updateEnvArgs struct {
 
 func handleUpdateEnvironment(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateEnvArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	env, err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Update(ctx, args.Name)
+	env, err := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Update(ctx, args.Name)
 	if err != nil {
 		return apiErr("update environment", err), nil, nil
 	}
@@ -102,13 +106,14 @@ func handleUpdateEnvironment(
 
 func handleListEnvVariables(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args envArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars, err := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables().List(ctx)
+	vars, err := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables().List(ctx)
 	if err != nil {
 		return apiErr("list environment variables", err), nil, nil
 	}
@@ -127,13 +132,14 @@ type createEnvVarArgs struct {
 
 func handleCreateEnvVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createEnvVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	vars := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
 	// Upsert: the API's create endpoint rejects duplicate names.
 	if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
 		v, err := vars.Update(ctx, slug, args.Value)
@@ -161,13 +167,14 @@ type updateEnvVarArgs struct {
 
 func handleUpdateEnvVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateEnvVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	vars := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
 	v, err := vars.Update(ctx, resolveVariableSlug(ctx, vars.List, args.Variable), args.Value)
 	if err != nil {
 		return apiErr("update environment variable", err), nil, nil
@@ -186,13 +193,14 @@ type deleteEnvVarArgs struct {
 
 func handleDeleteEnvVariable(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deleteEnvVarArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	vars := sdk().Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
+	vars := api.Workspace(args.Workspace).Project(args.Project).Env(args.Env).Variables()
 	if err := vars.Delete(ctx, resolveVariableSlug(ctx, vars.List, args.Variable)); err != nil {
 		return apiErr("delete environment variable", err), nil, nil
 	}

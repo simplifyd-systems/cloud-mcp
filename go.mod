@@ -1,12 +1,16 @@
 module github.com/simplifyd-com/cloud-mcp
 
+// Local SDK: static site support is unreleased. Drop this once cloud-go-sdk
+// ships a version containing StaticSitesClient.
+replace github.com/simplifyd-systems/cloud-go-sdk => ../sdk/cloud-go-sdk
+
 go 1.23.0
 
 toolchain go1.23.5
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.3.1
-	github.com/simplifyd-systems/cloud-go-sdk v0.1.11
+	github.com/simplifyd-systems/cloud-go-sdk v0.1.12
 )
 
 require (

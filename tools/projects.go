@@ -14,13 +14,14 @@ type listProjectsArgs struct {
 
 func handleListProjects(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args listProjectsArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	projects, err := sdk().Workspace(args.Workspace).ListProjects(ctx)
+	projects, err := api.Workspace(args.Workspace).ListProjects(ctx)
 	if err != nil {
 		return apiErr("list projects", err), nil, nil
 	}
@@ -36,13 +37,14 @@ type projectArgs struct {
 
 func handleGetProject(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args projectArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	p, err := sdk().Workspace(args.Workspace).Project(args.Project).Get(ctx)
+	p, err := api.Workspace(args.Workspace).Project(args.Project).Get(ctx)
 	if err != nil {
 		return apiErr("get project", err), nil, nil
 	}
@@ -58,13 +60,14 @@ type createProjectArgs struct {
 
 func handleCreateProject(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args createProjectArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	p, err := sdk().Workspace(args.Workspace).CreateProject(ctx, args.Name)
+	p, err := api.Workspace(args.Workspace).CreateProject(ctx, args.Name)
 	if err != nil {
 		return apiErr("create project", err), nil, nil
 	}
@@ -81,13 +84,14 @@ type updateProjectArgs struct {
 
 func handleUpdateProject(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args updateProjectArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	p, err := sdk().Workspace(args.Workspace).Project(args.Project).Update(ctx, args.Name)
+	p, err := api.Workspace(args.Workspace).Project(args.Project).Update(ctx, args.Name)
 	if err != nil {
 		return apiErr("update project", err), nil, nil
 	}

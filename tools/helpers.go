@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	cloud "github.com/simplifyd-systems/cloud-go-sdk"
@@ -16,11 +18,24 @@ import (
 	"github.com/simplifyd-com/cloud-mcp/client"
 )
 
+// Process-wide auth state. This is the stdio identity only: a single local
+// user running the binary as a subprocess. It is never read or written on the
+// HTTP path, where each caller supplies their own token per request.
 var (
 	sdkMu     sync.RWMutex
 	sdkClient *cloud.Client
 	sdkToken  string
 )
+
+// sharedTransport is reused by every SDK client so that per-request clients on
+// the HTTP path still pool connections to the API instead of renegotiating TLS
+// on every tool call. cloud.NewClient would otherwise build a fresh
+// http.Client, and therefore a fresh connection pool, for each caller.
+var sharedTransport http.RoundTripper = func() http.RoundTripper {
+	t := http.DefaultTransport.(*http.Transport).Clone()
+	t.MaxIdleConnsPerHost = 32
+	return t
+}()
 
 func init() {
 	sdkToken = client.ResolveToken()
@@ -31,18 +46,16 @@ func newSDKClient(token string) *cloud.Client {
 	return cloud.NewClient(
 		cloud.WithToken(token),
 		cloud.WithBaseURL(client.BaseURL()),
+		cloud.WithHTTPClient(&http.Client{
+			Timeout:   30 * time.Second,
+			Transport: sharedTransport,
+		}),
 	)
 }
 
-// sdk returns the shared SDK client instance used by all tools.
-func sdk() *cloud.Client {
-	sdkMu.RLock()
-	defer sdkMu.RUnlock()
-	return sdkClient
-}
-
-// setToken swaps the SDK client for one authenticated with the given token
-// (SDK clients are immutable once constructed).
+// setToken swaps the process-wide SDK client for one authenticated with the
+// given token (SDK clients are immutable once constructed). Only the stdio
+// transport calls this — see RegisterAuthTools.
 func setToken(token string) {
 	sdkMu.Lock()
 	defer sdkMu.Unlock()
@@ -50,11 +63,52 @@ func setToken(token string) {
 	sdkClient = newSDKClient(token)
 }
 
-// isAuthenticated reports whether a token is configured.
-func isAuthenticated() bool {
+// localClient returns the process-wide client and whether a token is set.
+func localClient() (*cloud.Client, bool) {
 	sdkMu.RLock()
 	defer sdkMu.RUnlock()
-	return sdkToken != ""
+	return sdkClient, sdkToken != ""
+}
+
+// bearerToken extracts the token from an Authorization header value,
+// tolerating any capitalisation of the scheme.
+func bearerToken(header string) string {
+	const prefix = "bearer "
+	if len(header) > len(prefix) && strings.EqualFold(header[:len(prefix)], prefix) {
+		return strings.TrimSpace(header[len(prefix):])
+	}
+	return ""
+}
+
+// sdkFor resolves the API client for a single tool call, and replaces the old
+// requireAuth+sdk pair.
+//
+// Over HTTP, req.Extra is non-nil and carries the caller's headers: the token
+// is taken from Authorization on every call, so concurrent users of a hosted
+// server never observe each other's credentials. Over stdio, Extra is nil and
+// we fall back to the process-wide token resolved from SIMPLIFYD_API_TOKEN,
+// ~/.simplifyd/config.json, or the login tool.
+//
+// The returned result is non-nil exactly when ok is false, and should be
+// returned to the caller as the tool's error result.
+func sdkFor(req *mcp.CallToolRequest) (*cloud.Client, *mcp.CallToolResult, bool) {
+	if req != nil && req.Extra != nil {
+		token := bearerToken(req.Extra.Header.Get("Authorization"))
+		if token == "" {
+			return nil, toolError(
+				"not authenticated — send a Simplifyd API token as an " +
+					"Authorization: Bearer <token> header",
+			), false
+		}
+		return newSDKClient(token), nil, true
+	}
+	api, ok := localClient()
+	if !ok {
+		return nil, toolError(
+			"not authenticated — set SIMPLIFYD_API_TOKEN or run the login tool first",
+		), false
+	}
+	return api, nil, true
 }
 
 // text returns a successful CallToolResult containing a plain-text message.
@@ -129,17 +183,6 @@ func redactSensitiveFields(v any) {
 			redactSensitiveFields(child)
 		}
 	}
-}
-
-// requireAuth checks that a token is configured and returns an error result
-// if not. Returns true when authenticated.
-func requireAuth() (*mcp.CallToolResult, bool) {
-	if !isAuthenticated() {
-		return toolError(
-			"not authenticated — set SIMPLIFYD_API_TOKEN or run the login tool first",
-		), false
-	}
-	return nil, true
 }
 
 // apiErr formats an API error for display.

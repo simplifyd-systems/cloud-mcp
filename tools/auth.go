@@ -16,12 +16,23 @@ type loginArgs struct {
 	Password string `json:"password" jsonschema:"Your account password"`
 }
 
+// handleLogin is registered only for the stdio transport. It mutates
+// process-wide state and writes ~/.simplifyd/config.json, both of which are
+// per-machine concepts: on a hosted server they would apply one caller's
+// credentials to every other connected caller.
 func handleLogin(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args loginArgs,
 ) (*mcp.CallToolResult, any, error) {
-	resp, err := sdk().Login(ctx, args.Email, args.Password)
+	if req != nil && req.Extra != nil {
+		return toolError(
+			"login is not available over HTTP — authenticate by sending a " +
+				"Simplifyd API token as an Authorization: Bearer <token> header",
+		), nil, nil
+	}
+	api, _ := localClient()
+	resp, err := api.Login(ctx, args.Email, args.Password)
 	if err != nil {
 		return apiErr("login failed", err), nil, nil
 	}
@@ -56,25 +67,30 @@ func handleLogin(
 
 func handleGetMe(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	_ struct{},
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	u, err := sdk().Me(ctx)
+	u, err := api.Me(ctx)
 	if err != nil {
 		return apiErr("get current user", err), nil, nil
 	}
 	return jsonText(u), nil, nil
 }
 
-// RegisterAuthTools registers all authentication-related MCP tools on s.
-func RegisterAuthTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
-		Name:        "login",
-		Description: "Log in to Simplifyd Cloud with your email and password. Saves the session token for subsequent calls.",
-	}, handleLogin)
+// RegisterAuthTools registers the authentication tools on s. The login tool is
+// registered only when local is true (stdio), since it persists credentials to
+// the machine running the server — see handleLogin.
+func RegisterAuthTools(s *mcp.Server, local bool) {
+	if local {
+		mcp.AddTool(s, &mcp.Tool{
+			Name:        "login",
+			Description: "Log in to Simplifyd Cloud with your email and password. Saves the session token for subsequent calls.",
+		}, handleLogin)
+	}
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name:        "get-me",

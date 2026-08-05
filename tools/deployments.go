@@ -14,13 +14,14 @@ import (
 
 func handleListDeployments(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	deployments, err := services(args.Workspace, args.Project, args.Env).ListDeployments(ctx, args.Service)
+	deployments, err := services(api, args.Workspace, args.Project, args.Env).ListDeployments(ctx, args.Service)
 	if err != nil {
 		return apiErr("list deployments", err), nil, nil
 	}
@@ -39,13 +40,14 @@ type deploymentArgs struct {
 
 func handleGetDeployment(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deploymentArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	d, err := services(args.Workspace, args.Project, args.Env).GetDeployment(ctx, args.Service, args.Deployment)
+	d, err := services(api, args.Workspace, args.Project, args.Env).GetDeployment(ctx, args.Service, args.Deployment)
 	if err != nil {
 		return apiErr("get deployment", err), nil, nil
 	}
@@ -64,13 +66,14 @@ type deployServiceArgs struct {
 
 func handleDeployService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deployServiceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	d, err := services(args.Workspace, args.Project, args.Env).Deploy(ctx, args.Service,
+	d, err := services(api, args.Workspace, args.Project, args.Env).Deploy(ctx, args.Service,
 		cloud.DeployOptions{AutoApproveChangeSets: args.AutoApproveChangesets})
 	if err != nil {
 		return apiErr("deploy service", err), nil, nil
@@ -90,13 +93,14 @@ type redeployServiceArgs struct {
 
 func handleRedeployService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args redeployServiceArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	d, err := services(args.Workspace, args.Project, args.Env).Redeploy(ctx, args.Service,
+	d, err := services(api, args.Workspace, args.Project, args.Env).Redeploy(ctx, args.Service,
 		cloud.DeployOptions{AutoApproveChangeSets: args.AutoApproveChangesets})
 	if err != nil {
 		return apiErr("redeploy service", err), nil, nil
@@ -108,13 +112,14 @@ func handleRedeployService(
 
 func handleUndeployService(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args svcArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
-	if err := services(args.Workspace, args.Project, args.Env).Undeploy(ctx, args.Service); err != nil {
+	if err := services(api, args.Workspace, args.Project, args.Env).Undeploy(ctx, args.Service); err != nil {
 		return apiErr("undeploy service", err), nil, nil
 	}
 	return text("Service undeployed successfully"), nil, nil
@@ -139,10 +144,11 @@ const (
 
 func handleGetDeploymentLogs(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	req *mcp.CallToolRequest,
 	args deploymentLogsArgs,
 ) (*mcp.CallToolResult, any, error) {
-	if r, ok := requireAuth(); !ok {
+	api, r, ok := sdkFor(req)
+	if !ok {
 		return r, nil, nil
 	}
 	maxLines := args.MaxLines
@@ -156,7 +162,7 @@ func handleGetDeploymentLogs(
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	lines, err := services(args.Workspace, args.Project, args.Env).GetLogs(ctx, args.Service, args.Deployment, maxLines)
+	lines, err := services(api, args.Workspace, args.Project, args.Env).GetLogs(ctx, args.Service, args.Deployment, maxLines)
 	if err != nil && len(lines) == 0 {
 		return apiErr("get deployment logs", err), nil, nil
 	}
