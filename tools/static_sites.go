@@ -170,6 +170,63 @@ func handleGetStaticSite(
 	return jsonText(site), nil, nil
 }
 
+// ---- list-static-site-files ----
+
+type listStaticSiteFilesArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Project   string `json:"project"   jsonschema:"Project slug"`
+	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Prefix    string `json:"prefix,omitempty" jsonschema:"Optional path prefix to list, e.g. assets/. Lists the whole site when omitted."`
+}
+
+func handleListStaticSiteFiles(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args listStaticSiteFilesArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	list, err := services(api, args.Workspace, args.Project, args.Env).
+		StaticSite(args.Service).ListFiles(ctx, args.Prefix)
+	if err != nil {
+		return apiErr("list static site files", err), nil, nil
+	}
+	return jsonText(list), nil, nil
+}
+
+// ---- get-static-site-files ----
+
+type getStaticSiteFilesArgs struct {
+	Workspace string   `json:"workspace" jsonschema:"Workspace slug"`
+	Project   string   `json:"project"   jsonschema:"Project slug"`
+	Env       string   `json:"env"       jsonschema:"Environment slug"`
+	Service   string   `json:"service"   jsonschema:"Static site service slug"`
+	Paths     []string `json:"paths"     jsonschema:"Paths of the files to download, e.g. [\"index.html\", \"assets/app.js\"]. Use list-static-site-files to discover them."`
+}
+
+func handleGetStaticSiteFiles(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args getStaticSiteFilesArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	if len(args.Paths) == 0 {
+		return text("paths is required — name at least one file to download"), nil, nil
+	}
+	result, err := services(api, args.Workspace, args.Project, args.Env).
+		StaticSite(args.Service).Fetch(ctx, args.Paths)
+	if err != nil {
+		return apiErr("get static site files", err), nil, nil
+	}
+	return jsonText(result), nil, nil
+}
+
 // ---- set-static-site-domain ----
 
 type setStaticSiteDomainArgs struct {
@@ -217,6 +274,20 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 		Name:        "get-static-site",
 		Description: "Get a static site's configuration, serving URLs, custom domain status and storage usage.",
 	}, handleGetStaticSite)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "list-static-site-files",
+		Description: "List the files currently published to a static site, with sizes and modification times. " +
+			"Lists nested files too. Use this to see what a site contains before downloading or editing it.",
+	}, handleListStaticSiteFiles)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "get-static-site-files",
+		Description: "Download the contents of published static site files. Contents come back inline in the " +
+			"same shape deploy-static-site accepts, so you can fetch a file, edit it and republish it. " +
+			"Text is returned as utf8 and binary files as base64. When republishing edited files, either send " +
+			"the complete file set, or set prune=false to patch just the files you changed.",
+	}, handleGetStaticSiteFiles)
 
 	mcp.AddTool(s, &mcp.Tool{
 		Name: "set-static-site-domain",
