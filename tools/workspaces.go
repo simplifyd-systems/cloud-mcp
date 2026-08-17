@@ -281,21 +281,11 @@ func handleGetRegistry(
 	return jsonText(reg), nil, nil
 }
 
-func handleGetRegistryCredentials(
-	ctx context.Context,
-	req *mcp.CallToolRequest,
-	args workspaceSlugArgs,
-) (*mcp.CallToolResult, any, error) {
-	api, r, ok := sdkFor(req)
-	if !ok {
-		return r, nil, nil
-	}
-	creds, err := api.Workspace(args.Workspace).Registry().Credentials(ctx)
-	if err != nil {
-		return apiErr("get registry credentials", err), nil, nil
-	}
-	return jsonTextRaw(creds), nil, nil
-}
+// Registry credentials are deliberately not exposed as a tool on any
+// transport. Pushing is the CLI's job: `edge registry push` fetches the
+// credentials, hands them straight to the Docker daemon, and never surfaces
+// them. Re-adding a credential-reveal tool here would put a long-lived robot
+// account into model context, where it is logged and replayable.
 
 func handleListRegistryRepos(
 	ctx context.Context,
@@ -311,6 +301,68 @@ func handleListRegistryRepos(
 		return apiErr("list registry repos", err), nil, nil
 	}
 	return jsonText(repos), nil, nil
+}
+
+type registryRepoArgs struct {
+	Workspace  string `json:"workspace"  jsonschema:"Workspace slug"`
+	Repository string `json:"repository" jsonschema:"Full repository name including the registry project prefix, e.g. myworkspace/myapp"`
+}
+
+func handleListRegistryArtifacts(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args registryRepoArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	artifacts, err := api.Workspace(args.Workspace).Registry().ListArtifacts(ctx, args.Repository)
+	if err != nil {
+		return apiErr("list registry artifacts", err), nil, nil
+	}
+	return jsonText(artifacts), nil, nil
+}
+
+type deleteRegistryTagArgs struct {
+	Workspace  string `json:"workspace"  jsonschema:"Workspace slug"`
+	Repository string `json:"repository" jsonschema:"Full repository name including the registry project prefix, e.g. myworkspace/myapp"`
+	Digest     string `json:"digest"     jsonschema:"Digest of the image carrying the tag, as returned by list-registry-artifacts"`
+	Tag        string `json:"tag,omitempty" jsonschema:"Tag to delete. Omit to delete the whole image and every tag pointing at it"`
+}
+
+func handleDeleteRegistryTag(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args deleteRegistryTagArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+
+	registry := api.Workspace(args.Workspace).Registry()
+
+	var (
+		deleted string
+		err     error
+	)
+	if args.Tag == "" {
+		deleted, err = registry.DeleteArtifact(ctx, args.Repository, args.Digest)
+	} else {
+		deleted, err = registry.DeleteTag(ctx, args.Repository, args.Digest, args.Tag)
+	}
+	if err != nil {
+		return apiErr("delete registry tag", err), nil, nil
+	}
+
+	return jsonText(map[string]any{
+		"success":    true,
+		"deleted":    deleted,
+		"repository": args.Repository,
+		"digest":     args.Digest,
+		"tag":        args.Tag,
+	}), nil, nil
 }
 
 // RegisterWorkspaceTools registers all workspace-related MCP tools on s.
@@ -381,12 +433,20 @@ func RegisterWorkspaceTools(s *mcp.Server) {
 	}, handleGetRegistry)
 
 	mcp.AddTool(s, &mcp.Tool{
-		Name:        "get-registry-credentials",
-		Description: "Explicitly reveal push/pull username, password, and credential data for docker login. Treat the response as secret.",
-	}, handleGetRegistryCredentials)
-
-	mcp.AddTool(s, &mcp.Tool{
 		Name:        "list-registry-repos",
 		Description: "List repositories in the workspace container registry.",
 	}, handleListRegistryRepos)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name:        "list-registry-artifacts",
+		Description: "List the images in a registry repository with their tags, digests and sizes.",
+	}, handleListRegistryArtifacts)
+
+	mcp.AddTool(s, &mcp.Tool{
+		Name: "delete-registry-tag",
+		Description: "Delete a single image tag from a registry repository, leaving other tags on the same image intact. " +
+			"When the tag is the last one on its image, the image itself is deleted. " +
+			"Omit tag to delete the whole image and every tag pointing at it. " +
+			"The response reports whether a tag or an artifact was deleted.",
+	}, handleDeleteRegistryTag)
 }

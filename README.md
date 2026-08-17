@@ -12,7 +12,7 @@ over either **stdio** (a local client launches the binary as a subprocess) or
 | Category | Tools |
 |---|---|
 | **Auth** | `login` (stdio only), `get-me` |
-| **Workspaces** | `list-workspaces`, `get-workspace`, `create-workspace`, `update-workspace`, `get-workspace-usage`, `get-workspace-transactions`, `get-my-role`, `list-workspace-members`, `add-workspace-member`, `update-member-role`, `remove-workspace-member`, `fund-workspace`, `get-registry`, `get-registry-credentials`, `list-registry-repos` |
+| **Workspaces** | `list-workspaces`, `get-workspace`, `create-workspace`, `update-workspace`, `get-workspace-usage`, `get-workspace-transactions`, `get-my-role`, `list-workspace-members`, `add-workspace-member`, `update-member-role`, `remove-workspace-member`, `fund-workspace`, `get-registry`, `list-registry-repos`, `list-registry-artifacts`, `delete-registry-tag` |
 | **Projects** | `list-projects`, `get-project`, `create-project`, `update-project` |
 | **Environments** | `list-environments`, `get-environment`, `create-environment`, `update-environment`, `list-env-variables`, `create-env-variable`, `update-env-variable`, `delete-env-variable` |
 | **Services** | `list-services`, `get-service`, `create-service`, `update-service`, `delete-service`, `list-private-service-access`, `grant-private-service-access`, `revoke-private-service-access`, `list-service-variables`, `add-service-variable`, `set-service-variables`, `delete-service-variable`, `add-service-ingress`, `delete-service-ingress`, `add-tcp-proxy`, `delete-tcp-proxy`, `set-ingress-source-ranges`, `add-service-config`, `update-service-config`, `delete-service-config`, `approve-service-changeset`, `discard-service-changeset`, `add-shared-variable` |
