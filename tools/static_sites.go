@@ -22,9 +22,9 @@ type staticSiteFileArgs struct {
 }
 
 type deployStaticSiteArgs struct {
-	Workspace string               `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string               `json:"project"   jsonschema:"Project slug"`
-	Env       string               `json:"env"       jsonschema:"Environment slug"`
+	Workspace string               `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string               `json:"project"   jsonschema:"Project slug or name"`
+	Env       string               `json:"env"       jsonschema:"Environment slug or name"`
 	Name      string               `json:"name"      jsonschema:"Site name. An existing static site with this name is reused; otherwise one is created."`
 	Files     []staticSiteFileArgs `json:"files"     jsonschema:"The site's files. Must include the index document (index.html by default)."`
 	Prune     *bool                `json:"prune,omitempty" jsonschema:"Remove files not in this request, making the publish a full replace. Default true. Set false to patch individual files."`
@@ -148,9 +148,9 @@ func handleDeployStaticSite(
 // ---- get-static-site ----
 
 type getStaticSiteArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Static site service slug"`
 }
 
@@ -173,9 +173,9 @@ func handleGetStaticSite(
 // ---- list-static-site-files ----
 
 type listStaticSiteFilesArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Static site service slug"`
 	Prefix    string `json:"prefix,omitempty" jsonschema:"Optional path prefix to list, e.g. assets/. Lists the whole site when omitted."`
 }
@@ -200,9 +200,9 @@ func handleListStaticSiteFiles(
 // ---- get-static-site-files ----
 
 type getStaticSiteFilesArgs struct {
-	Workspace string   `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string   `json:"project"   jsonschema:"Project slug"`
-	Env       string   `json:"env"       jsonschema:"Environment slug"`
+	Workspace string   `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string   `json:"project"   jsonschema:"Project slug or name"`
+	Env       string   `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string   `json:"service"   jsonschema:"Static site service slug"`
 	Paths     []string `json:"paths"     jsonschema:"Paths of the files to download, e.g. [\"index.html\", \"assets/app.js\"]. Use list-static-site-files to discover them."`
 }
@@ -230,9 +230,9 @@ func handleGetStaticSiteFiles(
 // ---- set-static-site-domain ----
 
 type setStaticSiteDomainArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Static site service slug"`
 	Domain    string `json:"domain"    jsonschema:"Custom domain to serve the site on. Pass an empty string to detach the current domain."`
 }
@@ -261,7 +261,7 @@ func handleSetStaticSiteDomain(
 
 // RegisterStaticSiteTools adds the static site tools to the server.
 func RegisterStaticSiteTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "deploy-static-site",
 		Description: "Deploy an HTML/CSS/JS site to Simplifyd in one call. File contents are passed inline, " +
 			"so no Docker image, build step or file upload is needed. Creates the site if one with this name " +
@@ -270,18 +270,18 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 			"Binary files (images, fonts) must be sent with encoding=base64.",
 	}, handleDeployStaticSite)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-static-site",
 		Description: "Get a static site's configuration, serving URLs, custom domain status and storage usage.",
 	}, handleGetStaticSite)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "list-static-site-files",
 		Description: "List the files currently published to a static site, with sizes and modification times. " +
 			"Lists nested files too. Use this to see what a site contains before downloading or editing it.",
 	}, handleListStaticSiteFiles)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "get-static-site-files",
 		Description: "Download the contents of published static site files. Contents come back inline in the " +
 			"same shape deploy-static-site accepts, so you can fetch a file, edit it and republish it. " +
@@ -289,7 +289,7 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 			"the complete file set, or set prune=false to patch just the files you changed.",
 	}, handleGetStaticSiteFiles)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "set-static-site-domain",
 		Description: "Attach a custom domain to a static site, or detach it by passing an empty domain. " +
 			"Deploys the site so routing takes effect, and returns the CNAME target the domain must point at.",

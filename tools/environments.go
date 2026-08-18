@@ -9,8 +9,8 @@ import (
 // ---- list-environments ----
 
 type envListArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
 }
 
 func handleListEnvironments(
@@ -32,9 +32,9 @@ func handleListEnvironments(
 // ---- get-environment ----
 
 type envArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 }
 
 func handleGetEnvironment(
@@ -56,8 +56,8 @@ func handleGetEnvironment(
 // ---- create-environment ----
 
 type createEnvArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Name      string `json:"name"      jsonschema:"Display name for the new environment"`
 }
 
@@ -80,9 +80,9 @@ func handleCreateEnvironment(
 // ---- update-environment ----
 
 type updateEnvArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Name      string `json:"name"      jsonschema:"New display name for the environment"`
 }
 
@@ -123,9 +123,9 @@ func handleListEnvVariables(
 // ---- create-env-variable ----
 
 type createEnvVarArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Name      string `json:"name"      jsonschema:"Variable name (e.g. DATABASE_URL)"`
 	Value     string `json:"value"     jsonschema:"Variable value"`
 }
@@ -158,9 +158,9 @@ func handleCreateEnvVariable(
 // ---- update-env-variable ----
 
 type updateEnvVarArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Variable  string `json:"variable"  jsonschema:"Variable slug or ID to update"`
 	Value     string `json:"value"     jsonschema:"New variable value"`
 }
@@ -185,9 +185,9 @@ func handleUpdateEnvVariable(
 // ---- delete-env-variable ----
 
 type deleteEnvVarArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Variable  string `json:"variable"  jsonschema:"Variable slug or ID to delete"`
 }
 
@@ -209,42 +209,42 @@ func handleDeleteEnvVariable(
 
 // RegisterEnvironmentTools registers all environment-related MCP tools on s.
 func RegisterEnvironmentTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-environments",
 		Description: "List all environments in a project.",
 	}, handleListEnvironments)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-environment",
 		Description: "Get details of a specific environment including its services and variables.",
 	}, handleGetEnvironment)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-environment",
 		Description: "Create a new environment inside a project.",
 	}, handleCreateEnvironment)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-environment",
 		Description: "Rename an existing environment.",
 	}, handleUpdateEnvironment)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-env-variables",
 		Description: "List all shared environment variables for an environment.",
 	}, handleListEnvVariables)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-env-variable",
 		Description: "Create a new shared environment variable (available to all services in the environment).",
 	}, handleCreateEnvVariable)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-env-variable",
 		Description: "Update the value of an existing environment variable.",
 	}, handleUpdateEnvVariable)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-env-variable",
 		Description: "Delete an environment variable.",
 	}, handleDeleteEnvVariable)

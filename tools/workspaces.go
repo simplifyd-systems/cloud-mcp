@@ -28,7 +28,7 @@ func handleListWorkspaces(
 // ---- get-workspace ----
 
 type workspaceSlugArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 }
 
 func handleGetWorkspace(
@@ -72,7 +72,7 @@ func handleCreateWorkspace(
 // ---- update-workspace ----
 
 type updateWorkspaceArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Name      string `json:"name"      jsonschema:"New display name for the workspace"`
 }
 
@@ -167,7 +167,7 @@ func handleListWorkspaceMembers(
 // ---- add-workspace-member ----
 
 type addWorkspaceMemberArgs struct {
-	Workspace string   `json:"workspace"      jsonschema:"Workspace slug"`
+	Workspace string   `json:"workspace"      jsonschema:"Workspace slug or name"`
 	Emails    []string `json:"emails"         jsonschema:"Email addresses of the people to invite"`
 	Role      string   `json:"role,omitempty" jsonschema:"Role for the invited members: owner, developer (default), or billing"`
 }
@@ -197,7 +197,7 @@ func handleAddWorkspaceMember(
 // ---- update-member-role ----
 
 type updateMemberRoleArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	MemberID  string `json:"member_id" jsonschema:"Member slug or ID whose role to change"`
 	Role      string `json:"role"      jsonschema:"New role: owner, developer, or billing"`
 }
@@ -220,7 +220,7 @@ func handleUpdateMemberRole(
 // ---- remove-workspace-member ----
 
 type removeWorkspaceMemberArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	MemberID  string `json:"member_id"  jsonschema:"Member ID to remove"`
 }
 
@@ -242,7 +242,7 @@ func handleRemoveWorkspaceMember(
 // ---- fund-workspace ----
 
 type fundWorkspaceArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Method    string `json:"method"    jsonschema:"Payment method: paystack (NGN) | stripe (USD) | bank_transfer (NGN)"`
 	Amount    int64  `json:"amount"    jsonschema:"Amount in the smallest currency unit (kobo for NGN or cents for USD)"`
 }
@@ -304,7 +304,7 @@ func handleListRegistryRepos(
 }
 
 type registryRepoArgs struct {
-	Workspace  string `json:"workspace"  jsonschema:"Workspace slug"`
+	Workspace  string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Repository string `json:"repository" jsonschema:"Full repository name including the registry project prefix, e.g. myworkspace/myapp"`
 }
 
@@ -325,7 +325,7 @@ func handleListRegistryArtifacts(
 }
 
 type deleteRegistryTagArgs struct {
-	Workspace  string `json:"workspace"  jsonschema:"Workspace slug"`
+	Workspace  string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Repository string `json:"repository" jsonschema:"Full repository name including the registry project prefix, e.g. myworkspace/myapp"`
 	Digest     string `json:"digest"     jsonschema:"Digest of the image carrying the tag, as returned by list-registry-artifacts"`
 	Tag        string `json:"tag,omitempty" jsonschema:"Tag to delete. Omit to delete the whole image and every tag pointing at it"`
@@ -367,82 +367,82 @@ func handleDeleteRegistryTag(
 
 // RegisterWorkspaceTools registers all workspace-related MCP tools on s.
 func RegisterWorkspaceTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-workspaces",
 		Description: "List all workspaces the authenticated user belongs to.",
 	}, handleListWorkspaces)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-workspace",
 		Description: "Get details of a specific workspace including wallet balance.",
 	}, handleGetWorkspace)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-workspace",
 		Description: "Create a new workspace.",
 	}, handleCreateWorkspace)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-workspace",
 		Description: "Rename an existing workspace.",
 	}, handleUpdateWorkspace)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-workspace-usage",
 		Description: "Get the current-month billing summary for a workspace: usage costs, estimated burn, runway, and wallet balance (owner or billing role required).",
 	}, handleGetWorkspaceUsage)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-workspace-transactions",
 		Description: "List wallet transactions (fundings and charges) for a workspace (owner or billing role required).",
 	}, handleGetWorkspaceTransactions)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-my-role",
 		Description: "Get the calling user's role (owner, developer, or billing) in a workspace.",
 	}, handleGetMyRole)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-workspace-members",
 		Description: "List all members of a workspace with their roles.",
 	}, handleListWorkspaceMembers)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-workspace-member",
 		Description: "Invite one or more users to a workspace by email, optionally with a role (owner, developer, or billing).",
 	}, handleAddWorkspaceMember)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-member-role",
 		Description: "Change a workspace member's role (owner only).",
 	}, handleUpdateMemberRole)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "remove-workspace-member",
 		Description: "Remove a member from a workspace.",
 	}, handleRemoveWorkspaceMember)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "fund-workspace",
 		Description: "Initiate a wallet top-up for a workspace. Returns a payment URL for Paystack/Stripe or bank account details for bank transfer.",
 	}, handleFundWorkspace)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-registry",
 		Description: "Get the workspace container registry details (registry URL, project).",
 	}, handleGetRegistry)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-registry-repos",
 		Description: "List repositories in the workspace container registry.",
 	}, handleListRegistryRepos)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-registry-artifacts",
 		Description: "List the images in a registry repository with their tags, digests and sizes.",
 	}, handleListRegistryArtifacts)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name: "delete-registry-tag",
 		Description: "Delete a single image tag from a registry repository, leaving other tags on the same image intact. " +
 			"When the tag is the last one on its image, the image itself is deleted. " +

@@ -31,9 +31,9 @@ func handleListDeployments(
 // ---- get-deployment ----
 
 type deploymentArgs struct {
-	Workspace  string `json:"workspace"   jsonschema:"Workspace slug"`
-	Project    string `json:"project"     jsonschema:"Project slug"`
-	Env        string `json:"env"         jsonschema:"Environment slug"`
+	Workspace  string `json:"workspace"   jsonschema:"Workspace slug or name"`
+	Project    string `json:"project"     jsonschema:"Project slug or name"`
+	Env        string `json:"env"         jsonschema:"Environment slug or name"`
 	Service    string `json:"service"     jsonschema:"Service slug"`
 	Deployment string `json:"deployment"  jsonschema:"Deployment slug (UUID)"`
 }
@@ -57,9 +57,9 @@ func handleGetDeployment(
 // ---- deploy-service ----
 
 type deployServiceArgs struct {
-	Workspace             string `json:"workspace" jsonschema:"Workspace slug"`
-	Project               string `json:"project"   jsonschema:"Project slug"`
-	Env                   string `json:"env"       jsonschema:"Environment slug"`
+	Workspace             string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project               string `json:"project"   jsonschema:"Project slug or name"`
+	Env                   string `json:"env"       jsonschema:"Environment slug or name"`
 	Service               string `json:"service"   jsonschema:"Service slug"`
 	AutoApproveChangesets bool   `json:"auto_approve_changesets,omitempty" jsonschema:"Automatically approve any pending changesets before deploying (otherwise the deploy fails if changes are pending)"`
 }
@@ -84,9 +84,9 @@ func handleDeployService(
 // ---- redeploy-service ----
 
 type redeployServiceArgs struct {
-	Workspace             string `json:"workspace" jsonschema:"Workspace slug"`
-	Project               string `json:"project"   jsonschema:"Project slug"`
-	Env                   string `json:"env"       jsonschema:"Environment slug"`
+	Workspace             string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project               string `json:"project"   jsonschema:"Project slug or name"`
+	Env                   string `json:"env"       jsonschema:"Environment slug or name"`
 	Service               string `json:"service"   jsonschema:"Service slug"`
 	AutoApproveChangesets bool   `json:"auto_approve_changesets,omitempty" jsonschema:"Automatically approve any pending changesets before redeploying"`
 }
@@ -128,9 +128,9 @@ func handleUndeployService(
 // ---- get-deployment-logs ----
 
 type deploymentLogsArgs struct {
-	Workspace  string `json:"workspace"            jsonschema:"Workspace slug"`
-	Project    string `json:"project"              jsonschema:"Project slug"`
-	Env        string `json:"env"                  jsonschema:"Environment slug"`
+	Workspace  string `json:"workspace"            jsonschema:"Workspace slug or name"`
+	Project    string `json:"project"              jsonschema:"Project slug or name"`
+	Env        string `json:"env"                  jsonschema:"Environment slug or name"`
 	Service    string `json:"service"              jsonschema:"Service slug"`
 	Deployment string `json:"deployment"           jsonschema:"Deployment slug (UUID)"`
 	MaxLines   int    `json:"max_lines,omitempty"  jsonschema:"Maximum log lines to return (default 500)"`
@@ -195,32 +195,32 @@ func redactLogOutput(output string) string {
 
 // RegisterDeploymentTools registers all deployment-related MCP tools on s.
 func RegisterDeploymentTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-deployments",
 		Description: "List all deployments for a service, ordered most recent first.",
 	}, handleListDeployments)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-deployment",
 		Description: "Get details of a specific deployment (status, resource allocation, timestamps).",
 	}, handleGetDeployment)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "deploy-service",
 		Description: "Deploy a service. To change image or resources first use update-service (which stages a changeset), then deploy with auto_approve_changesets=true.",
 	}, handleDeployService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "redeploy-service",
 		Description: "Redeploy the currently active deployment of a service (useful after config or variable changes).",
 	}, handleRedeployService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "undeploy-service",
 		Description: "Stop and remove the active deployment of a service without deleting the service itself.",
 	}, handleUndeployService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-deployment-logs",
 		Description: "Fetch a snapshot of logs for a deployment (collects streamed lines for up to 10 seconds or max_lines).",
 	}, handleGetDeploymentLogs)

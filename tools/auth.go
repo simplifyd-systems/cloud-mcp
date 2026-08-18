@@ -2,9 +2,12 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	cloud "github.com/simplifyd-systems/cloud-go-sdk"
 
 	"github.com/simplifyd-com/cloud-mcp/client"
 )
@@ -75,10 +78,21 @@ func handleGetMe(
 		return r, nil, nil
 	}
 	u, err := api.Me(ctx)
-	if err != nil {
-		return apiErr("get current user", err), nil, nil
+	if err == nil {
+		return jsonText(u), nil, nil
 	}
-	return jsonText(u), nil, nil
+
+	// /v1/auth/me is outside a project token's capabilities, so this — usually
+	// the first tool a client calls — used to fail outright and make the whole
+	// server look broken. A project token has no user to describe, but it does
+	// know what it is scoped to, which is what the caller actually needs next.
+	var apiError *cloud.APIError
+	if errors.As(err, &apiError) && apiError.StatusCode == http.StatusForbidden {
+		if scope, scopeErr := api.TokenScope(ctx); scopeErr == nil {
+			return jsonText(scope), nil, nil
+		}
+	}
+	return apiErr("get current user", err), nil, nil
 }
 
 // RegisterAuthTools registers the authentication tools on s. The login tool is
@@ -92,7 +106,7 @@ func RegisterAuthTools(s *mcp.Server, local bool) {
 		}, handleLogin)
 	}
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-me",
 		Description: "Return the profile of the currently authenticated user.",
 	}, handleGetMe)

@@ -9,7 +9,7 @@ import (
 // ---- list-projects ----
 
 type listProjectsArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 }
 
 func handleListProjects(
@@ -31,8 +31,8 @@ func handleListProjects(
 // ---- get-project ----
 
 type projectArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
 }
 
 func handleGetProject(
@@ -54,7 +54,7 @@ func handleGetProject(
 // ---- create-project ----
 
 type createProjectArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Name      string `json:"name"      jsonschema:"Display name for the new project"`
 }
 
@@ -77,8 +77,8 @@ func handleCreateProject(
 // ---- update-project ----
 
 type updateProjectArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Name      string `json:"name"      jsonschema:"New display name for the project"`
 }
 
@@ -100,22 +100,22 @@ func handleUpdateProject(
 
 // RegisterProjectTools registers all project-related MCP tools on s.
 func RegisterProjectTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-projects",
 		Description: "List all projects in a workspace.",
 	}, handleListProjects)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-project",
 		Description: "Get details of a specific project.",
 	}, handleGetProject)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-project",
 		Description: "Create a new project inside a workspace.",
 	}, handleCreateProject)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-project",
 		Description: "Rename an existing project.",
 	}, handleUpdateProject)

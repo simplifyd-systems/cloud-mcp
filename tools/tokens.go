@@ -9,8 +9,8 @@ import (
 // ---- common args ----
 
 type tokenListArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
 }
 
 // ---- list-tokens ----
@@ -34,8 +34,8 @@ func handleListTokens(
 // ---- create-token ----
 
 type createTokenArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Name      string `json:"name"       jsonschema:"Display name for the token (e.g. CI/CD Token)"`
 	Env       string `json:"env,omitempty" jsonschema:"Optional environment slug; omit for access to all environments in the project"`
 }
@@ -59,8 +59,8 @@ func handleCreateToken(
 // ---- delete-token ----
 
 type deleteTokenArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Token     string `json:"token"      jsonschema:"Token slug or ID to revoke"`
 }
 
@@ -81,17 +81,17 @@ func handleDeleteToken(
 
 // RegisterTokenTools registers all token-related MCP tools on s.
 func RegisterTokenTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-tokens",
 		Description: "List all API tokens for a project.",
 	}, handleListTokens)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-token",
 		Description: "Create a project API token. This explicitly reveals the full secret key once. Omit env for all project environments, or provide env to restrict it.",
 	}, handleCreateToken)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-token",
 		Description: "Revoke (delete) a project API token.",
 	}, handleDeleteToken)

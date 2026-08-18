@@ -12,9 +12,9 @@ import (
 // ---- common args ----
 
 type svcArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Service slug"`
 }
 
@@ -27,9 +27,9 @@ func services(api *cloud.Client, workspace, project, env string) *cloud.Services
 // ---- list-services ----
 
 type listServicesArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 }
 
 func handleListServices(
@@ -85,9 +85,9 @@ func handleCreatePostgresBackup(
 }
 
 type postgresParametersArgs struct {
-	Workspace string `json:"workspace" jsonschema:"Workspace slug"`
-	Project   string `json:"project"   jsonschema:"Project slug"`
-	Env       string `json:"env"       jsonschema:"Environment slug"`
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug"`
 }
 
@@ -108,9 +108,9 @@ func handleGetPostgresParameters(
 }
 
 type updatePostgresParametersArgs struct {
-	Workspace  string            `json:"workspace"  jsonschema:"Workspace slug"`
-	Project    string            `json:"project"    jsonschema:"Project slug"`
-	Env        string            `json:"env"        jsonschema:"Environment slug"`
+	Workspace  string            `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project    string            `json:"project"    jsonschema:"Project slug or name"`
+	Env        string            `json:"env"        jsonschema:"Environment slug or name"`
 	Service    string            `json:"service"    jsonschema:"Managed PostgreSQL service slug"`
 	Parameters map[string]string `json:"parameters" jsonschema:"Complete replacement map of supported PostgreSQL parameter names to string values; use an empty map to restore platform defaults"`
 }
@@ -138,9 +138,9 @@ func handleUpdatePostgresParameters(
 // ---- create-service ----
 
 type createServiceArgs struct {
-	Workspace      string            `json:"workspace"    jsonschema:"Workspace slug"`
-	Project        string            `json:"project"      jsonschema:"Project slug"`
-	Env            string            `json:"env"          jsonschema:"Environment slug"`
+	Workspace      string            `json:"workspace"    jsonschema:"Workspace slug or name"`
+	Project        string            `json:"project"      jsonschema:"Project slug or name"`
+	Env            string            `json:"env"          jsonschema:"Environment slug or name"`
 	Name           string            `json:"name"         jsonschema:"Service display name"`
 	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
 	Image          string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
@@ -207,9 +207,9 @@ func handleCreateService(
 // ---- update-service ----
 
 type updateServiceArgs struct {
-	Workspace        string            `json:"workspace"                jsonschema:"Workspace slug"`
-	Project          string            `json:"project"                  jsonschema:"Project slug"`
-	Env              string            `json:"env"                      jsonschema:"Environment slug"`
+	Workspace        string            `json:"workspace"                jsonschema:"Workspace slug or name"`
+	Project          string            `json:"project"                  jsonschema:"Project slug or name"`
+	Env              string            `json:"env"                      jsonschema:"Environment slug or name"`
 	Service          string            `json:"service"                  jsonschema:"Service slug"`
 	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, readiness_probe, or delete_readiness_probe"`
 	Name             string            `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
@@ -346,9 +346,9 @@ func handleListServiceVariables(
 // ---- set-service-variables ----
 
 type setServiceVariablesArgs struct {
-	Workspace string            `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string            `json:"project"    jsonschema:"Project slug"`
-	Env       string            `json:"env"        jsonschema:"Environment slug"`
+	Workspace string            `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string            `json:"project"    jsonschema:"Project slug or name"`
+	Env       string            `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string            `json:"service"    jsonschema:"Service slug"`
 	Variables map[string]string `json:"variables"  jsonschema:"Map of variable names to values to set (bulk)"`
 }
@@ -371,9 +371,9 @@ func handleSetServiceVariables(
 // ---- add-service-variable ----
 
 type addSvcVarArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Name      string `json:"name"       jsonschema:"Variable name"`
 	Value     string `json:"value"      jsonschema:"Variable value"`
@@ -407,9 +407,9 @@ func handleAddServiceVariable(
 // ---- delete-service-variable ----
 
 type deleteSvcVarArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Variable  string `json:"variable"   jsonschema:"Variable slug or ID to delete"`
 }
@@ -433,9 +433,9 @@ func handleDeleteServiceVariable(
 // ---- add-shared-variable ----
 
 type addSharedVarArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Variable  string `json:"variable"   jsonschema:"Shared environment variable slug to link to this service"`
 }
@@ -458,9 +458,9 @@ func handleAddSharedVariable(
 // ---- add-service-ingress ----
 
 type addIngressArgs struct {
-	Workspace  string `json:"workspace"             jsonschema:"Workspace slug"`
-	Project    string `json:"project"               jsonschema:"Project slug"`
-	Env        string `json:"env"                   jsonschema:"Environment slug"`
+	Workspace  string `json:"workspace"             jsonschema:"Workspace slug or name"`
+	Project    string `json:"project"               jsonschema:"Project slug or name"`
+	Env        string `json:"env"                   jsonschema:"Environment slug or name"`
 	Service    string `json:"service"               jsonschema:"Service slug"`
 	CustomFQDN string `json:"custom_fqdn,omitempty" jsonschema:"Custom fully qualified domain name (leave empty for auto-generated subdomain)"`
 	Port       int    `json:"port,omitempty"        jsonschema:"Container port to route traffic to"`
@@ -494,9 +494,9 @@ func handleAddServiceIngress(
 // ---- delete-service-ingress ----
 
 type deleteIngressArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	FQDN      string `json:"fqdn"       jsonschema:"Fully qualified domain name to remove"`
 }
@@ -519,17 +519,17 @@ func handleDeleteServiceIngress(
 // ---- add-tcp-proxy ----
 
 type tcpProxyArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Port      uint   `json:"port"       jsonschema:"Container port to expose via TCP proxy"`
 }
 
 type addTCPProxyArgs struct {
-	Workspace           string   `json:"workspace"                       jsonschema:"Workspace slug"`
-	Project             string   `json:"project"                         jsonschema:"Project slug"`
-	Env                 string   `json:"env"                             jsonschema:"Environment slug"`
+	Workspace           string   `json:"workspace"                       jsonschema:"Workspace slug or name"`
+	Project             string   `json:"project"                         jsonschema:"Project slug or name"`
+	Env                 string   `json:"env"                             jsonschema:"Environment slug or name"`
 	Service             string   `json:"service"                         jsonschema:"Service slug"`
 	Port                uint     `json:"port"                            jsonschema:"Container port to expose via TCP proxy"`
 	AllowedSourceRanges []string `json:"allowed_source_ranges,omitempty" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty means open to all"`
@@ -554,9 +554,9 @@ func handleAddTCPProxy(
 // ---- set-ingress-source-ranges ----
 
 type setIngressSourceRangesArgs struct {
-	Workspace           string   `json:"workspace"             jsonschema:"Workspace slug"`
-	Project             string   `json:"project"               jsonschema:"Project slug"`
-	Env                 string   `json:"env"                   jsonschema:"Environment slug"`
+	Workspace           string   `json:"workspace"             jsonschema:"Workspace slug or name"`
+	Project             string   `json:"project"               jsonschema:"Project slug or name"`
+	Env                 string   `json:"env"                   jsonschema:"Environment slug or name"`
 	Service             string   `json:"service"               jsonschema:"Service slug"`
 	Ingress             string   `json:"ingress"               jsonschema:"Ingress port slug (from get-service ingress list)"`
 	AllowedSourceRanges []string `json:"allowed_source_ranges" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty list opens the port to all IPs"`
@@ -604,9 +604,9 @@ func handleDeleteTCPProxy(
 // ---- service configs ----
 
 type addConfigArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Name      string `json:"name"       jsonschema:"Config file display name"`
 	Content   string `json:"content"    jsonschema:"File content; supports ${{VAR_NAME}} interpolation of service variables at deploy time"`
@@ -634,9 +634,9 @@ func handleAddServiceConfig(
 }
 
 type updateConfigArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Config    string `json:"config"     jsonschema:"Config slug to update"`
 	Name      string `json:"name"       jsonschema:"Config file display name"`
@@ -665,9 +665,9 @@ func handleUpdateServiceConfig(
 }
 
 type deleteConfigArgs struct {
-	Workspace string `json:"workspace"  jsonschema:"Workspace slug"`
-	Project   string `json:"project"    jsonschema:"Project slug"`
-	Env       string `json:"env"        jsonschema:"Environment slug"`
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Config    string `json:"config"     jsonschema:"Config slug to delete"`
 }
@@ -722,9 +722,9 @@ func handleDiscardChangeset(
 // ---- cross-project private access ----
 
 type grantPrivateAccessArgs struct {
-	Workspace       string `json:"workspace"       jsonschema:"Workspace slug"`
+	Workspace       string `json:"workspace"       jsonschema:"Workspace slug or name"`
 	Project         string `json:"project"         jsonschema:"Destination service project slug"`
-	Env             string `json:"env"             jsonschema:"Destination service environment slug"`
+	Env             string `json:"env"             jsonschema:"Destination service environment slug or name"`
 	Service         string `json:"service"         jsonschema:"Destination service slug"`
 	ConsumerProject string `json:"consumer_project" jsonschema:"Consumer project slug in the same workspace"`
 	Protocol        string `json:"protocol"        jsonschema:"Private protocol: TCP or UDP"`
@@ -773,121 +773,121 @@ func handleRevokePrivateServiceAccess(ctx context.Context, req *mcp.CallToolRequ
 
 // RegisterServiceTools registers all service-related MCP tools on s.
 func RegisterServiceTools(s *mcp.Server) {
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-services",
 		Description: "List all services in an environment.",
 	}, handleListServices)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-service",
 		Description: "Get full details of a specific service including its status, config, variables, and ingress rules.",
 	}, handleGetService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-postgres-backup",
 		Description: "Start an on-demand base backup for a Postgres service. Use before risky migrations or other operations that require a fresh recovery base. The service must already have a valid backup destination configured.",
 	}, handleCreatePostgresBackup)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "get-postgres-parameters",
 		Description: "Get customer-controlled PostgreSQL server parameters and the platform allowlist for a managed Postgres service.",
 	}, handleGetPostgresParameters)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-postgres-parameters",
 		Description: "Replace the complete customer-controlled PostgreSQL parameter map for a managed Postgres service. Values are validated against a platform allowlist; an empty map restores platform defaults. Deploy the service afterward to apply changes.",
 	}, handleUpdatePostgresParameters)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "create-service",
 		Description: "Create a new service (docker, postgres, redis, http_gateway, s3_bucket, or static_site) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-service",
 		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables native rolling deployments; without one deployments use Recreate. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
 	}, handleUpdateService)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-service",
 		Description: "Delete a service and all its resources.",
 	}, handleDeleteService)
 
-	mcp.AddTool(s, &mcp.Tool{Name: "list-private-service-access", Description: "List cross-project grants for a destination service, including consumer project, protocol, and port."}, handleListPrivateServiceAccess)
-	mcp.AddTool(s, &mcp.Tool{Name: "grant-private-service-access", Description: "Allow services in another project in the same workspace to connect to one TCP/UDP port on this service over its private hostname. Applies live without a redeploy."}, handleGrantPrivateServiceAccess)
-	mcp.AddTool(s, &mcp.Tool{Name: "revoke-private-service-access", Description: "Revoke a cross-project private service access grant. Applies live without a redeploy."}, handleRevokePrivateServiceAccess)
+	addTool(s, &mcp.Tool{Name: "list-private-service-access", Description: "List cross-project grants for a destination service, including consumer project, protocol, and port."}, handleListPrivateServiceAccess)
+	addTool(s, &mcp.Tool{Name: "grant-private-service-access", Description: "Allow services in another project in the same workspace to connect to one TCP/UDP port on this service over its private hostname. Applies live without a redeploy."}, handleGrantPrivateServiceAccess)
+	addTool(s, &mcp.Tool{Name: "revoke-private-service-access", Description: "Revoke a cross-project private service access grant. Applies live without a redeploy."}, handleRevokePrivateServiceAccess)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "list-service-variables",
 		Description: "List all environment variables set directly on a service.",
 	}, handleListServiceVariables)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-service-variable",
 		Description: "Add a single environment variable to a service.",
 	}, handleAddServiceVariable)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "set-service-variables",
 		Description: "Bulk-set environment variables on a service (replaces all existing variables with the provided map).",
 	}, handleSetServiceVariables)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-service-variable",
 		Description: "Delete a specific environment variable from a service.",
 	}, handleDeleteServiceVariable)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-service-ingress",
 		Description: "Create an HTTP/gRPC ingress rule for a service (exposes it via a public URL on Cloudflare DNS).",
 	}, handleAddServiceIngress)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-service-ingress",
 		Description: "Remove an ingress rule from a service by FQDN.",
 	}, handleDeleteServiceIngress)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-tcp-proxy",
 		Description: "Add a TCP proxy to expose a service port externally. Optionally restrict which client IPs/CIDRs may connect.",
 	}, handleAddTCPProxy)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "set-ingress-source-ranges",
 		Description: "Set (replace) the client IP allowlist on a TCP/UDP ingress port's public LoadBalancer. Empty list opens the port to all IPs. Applies live, no redeploy needed.",
 	}, handleSetIngressSourceRanges)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-tcp-proxy",
 		Description: "Remove a TCP proxy from a service by container port.",
 	}, handleDeleteTCPProxy)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-service-config",
 		Description: "Add a static config file mount to a service. Content supports ${{VAR_NAME}} interpolation at deploy time.",
 	}, handleAddServiceConfig)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "update-service-config",
 		Description: "Update an existing config file mount on a service (name, content, and mount path are all required).",
 	}, handleUpdateServiceConfig)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "delete-service-config",
 		Description: "Delete a config file mount from a service.",
 	}, handleDeleteServiceConfig)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "approve-service-changeset",
 		Description: "Approve a service's pending changeset, applying staged changes (resources, image, etc.).",
 	}, handleApproveChangeset)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "discard-service-changeset",
 		Description: "Discard a service's pending changeset without applying it.",
 	}, handleDiscardChangeset)
 
-	mcp.AddTool(s, &mcp.Tool{
+	addTool(s, &mcp.Tool{
 		Name:        "add-shared-variable",
 		Description: "Link an existing environment-level shared variable into a specific service.",
 	}, handleAddSharedVariable)
