@@ -64,6 +64,7 @@ func main() {
 	tools.RegisterEnvironmentTools(server)
 	tools.RegisterServiceTools(server)
 	tools.RegisterPostgresExtensionTools(server)
+	tools.RegisterRegistryRetentionTools(server)
 	tools.RegisterStaticSiteTools(server)
 	tools.RegisterDeploymentTools(server)
 	tools.RegisterTokenTools(server)
