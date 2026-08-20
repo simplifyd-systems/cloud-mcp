@@ -49,6 +49,10 @@ func main() {
 		os.Exit(0)
 	}
 
+	// Before any tool can build a client, so API requests carry the real
+	// version rather than the package default.
+	tools.SetVersion(serverVersion)
+
 	local := !strings.EqualFold(os.Getenv("MCP_TRANSPORT"), "http")
 
 	server := mcp.NewServer(&mcp.Implementation{

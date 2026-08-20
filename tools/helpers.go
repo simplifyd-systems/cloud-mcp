@@ -42,10 +42,32 @@ func init() {
 	sdkClient = newSDKClient(sdkToken)
 }
 
+// Version is the server version reported to the API in the User-Agent. It is
+// overwritten by SetVersion at startup; the default matters only for a build
+// that never calls it.
+var Version = "dev"
+
+// SetVersion records the running server's version and rebuilds the
+// process-wide client so it identifies itself correctly.
+//
+// The rebuild is the point: package initialisation runs before main, so the
+// client built in init() already exists by the time main knows its own version,
+// and setting the string alone would leave the stdio client reporting "dev"
+// forever.
+func SetVersion(version string) {
+	sdkMu.Lock()
+	defer sdkMu.Unlock()
+	Version = version
+	sdkClient = newSDKClient(sdkToken)
+}
+
 func newSDKClient(token string) *cloud.Client {
 	return cloud.NewClient(
 		cloud.WithToken(token),
 		cloud.WithBaseURL(client.BaseURL()),
+		// Without this the SDK's default names the CLI, so MCP traffic would be
+		// listed as a command line in the user's session list.
+		cloud.WithUserAgent("edge-mcp/"+Version),
 		cloud.WithHTTPClient(&http.Client{
 			Timeout:   30 * time.Second,
 			Transport: sharedTransport,
