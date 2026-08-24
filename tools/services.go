@@ -138,22 +138,78 @@ func handleUpdatePostgresParameters(
 // ---- create-service ----
 
 type createServiceArgs struct {
-	Workspace      string            `json:"workspace"    jsonschema:"Workspace slug or name"`
-	Project        string            `json:"project"      jsonschema:"Project slug or name"`
-	Env            string            `json:"env"          jsonschema:"Environment slug or name"`
-	Name           string            `json:"name"         jsonschema:"Service display name"`
-	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
-	Image          string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
-	Tag            string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
-	StorageGB      *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server pod: each server holds a full copy of the data."`
-	Mode           string            `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
-	RedisReplicas  *int              `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
-	MySQLInstances *int              `json:"mysql_instances,omitempty" jsonschema:"Number of MySQL server pods (mysql type only). Group Replication needs a majority to accept writes, so use 1, 3, 5, 7 or 9 — an even count costs a pod without buying failure tolerance. Defaults to 1, a single server with no high availability."`
-	MySQLRouters   *int              `json:"mysql_routers,omitempty"  jsonschema:"Number of MySQL router pods (mysql type only, defaults to 1). Clients connect through the router, never to a server directly. Each router is a separately billed pod, so a 3-server cluster with 1 router bills 4 pods."`
-	MySQLVersion   string            `json:"mysql_version,omitempty"  jsonschema:"MySQL server version (mysql type only, e.g. 8.4.3). Defaults to the platform version; upgrades are never applied implicitly."`
-	BucketName     string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
-	BucketRegion   string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
-	ReadinessProbe *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
+	Workspace          string            `json:"workspace"    jsonschema:"Workspace slug or name"`
+	Project            string            `json:"project"      jsonschema:"Project slug or name"`
+	Env                string            `json:"env"          jsonschema:"Environment slug or name"`
+	Name               string            `json:"name"         jsonschema:"Service display name"`
+	Type               string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
+	Image              string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
+	Tag                string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
+	StorageGB          *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server pod: each server holds a full copy of the data."`
+	Mode               string            `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
+	RedisReplicas      *int              `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
+	MySQLInstances     *int              `json:"mysql_instances,omitempty" jsonschema:"Number of MySQL server pods (mysql type only). Group Replication needs a majority to accept writes, so use 1, 3, 5, 7 or 9 — an even count costs a pod without buying failure tolerance. Defaults to 1, a single server with no high availability."`
+	MySQLRouters       *int              `json:"mysql_routers,omitempty"  jsonschema:"Number of MySQL router pods (mysql type only, defaults to 1). Clients connect through the router, never to a server directly. Each router is a separately billed pod, so a 3-server cluster with 1 router bills 4 pods."`
+	MySQLVersion       string            `json:"mysql_version,omitempty"  jsonschema:"MySQL server version (mysql type only, e.g. 8.4.3). Defaults to the platform version; upgrades are never applied implicitly."`
+	MySQLRestoreBucket string            `json:"mysql_restore_bucket,omitempty" jsonschema:"Slug or name of a Simplifyd bucket service holding a backup to seed the new database from (mysql type only). Must be in the same project and environment. Requires mysql_restore_path."`
+	MySQLRestorePath   string            `json:"mysql_restore_path,omitempty"   jsonschema:"Path to ONE backup inside that bucket, e.g. /mysql/orders/2026-08-24T02-00-00Z (mysql type only). Not the folder holding all backups: a path with no backup in it loads nothing and the database silently starts up empty. Restoring is only possible when a database is created."`
+	BucketName         string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
+	BucketRegion       string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
+	ReadinessProbe     *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
+}
+
+type configureMySQLBackupArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
+	Service   string `json:"service"   jsonschema:"Service slug or name of the MySQL service"`
+
+	Frequency string `json:"frequency" jsonschema:"How often to back up: daily (02:00 UTC), twice_daily (02:00 and 14:00 UTC), weekly (Sunday 02:00 UTC), or an empty string to turn backups off. Turning them off keeps backups already written."`
+
+	BucketService string `json:"bucket_service,omitempty" jsonschema:"Slug or name of a Simplifyd bucket service to back up into. It must be in the same project and environment as the database. Preferred over supplying keys: its credentials are read at each run, so rotating them does not break backups. Give this OR the explicit bucket fields, never both."`
+
+	BucketName      string `json:"bucket_name,omitempty"       jsonschema:"Bucket name for an external S3-compatible destination"`
+	EndpointURL     string `json:"endpoint_url,omitempty"      jsonschema:"S3 endpoint URL for an external destination"`
+	Region          string `json:"region,omitempty"            jsonschema:"S3 region for an external destination"`
+	AccessKeyID     string `json:"access_key_id,omitempty"     jsonschema:"Access key ID for an external destination"`
+	SecretAccessKey string `json:"secret_access_key,omitempty" jsonschema:"Secret access key for an external destination"`
+}
+
+func handleConfigureMySQLBackup(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args configureMySQLBackupArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+
+	usingBucket := args.BucketService != ""
+	usingExplicit := args.BucketName != ""
+	if args.Frequency != "" && usingBucket == usingExplicit {
+		return text("give either bucket_service or bucket_name with credentials, not both"), nil, nil
+	}
+
+	in := cloud.MySQLBackupInput{
+		Frequency:       cloud.MySQLBackupFrequency(args.Frequency),
+		BucketSvcSlug:   args.BucketService,
+		BucketName:      args.BucketName,
+		EndpointURL:     args.EndpointURL,
+		Region:          args.Region,
+		AccessKeyID:     args.AccessKeyID,
+		SecretAccessKey: args.SecretAccessKey,
+	}
+
+	svcs := services(api, args.Workspace, args.Project, args.Env)
+	if err := svcs.ConfigureMySQLBackup(ctx, args.Service, in); err != nil {
+		return text(err.Error()), nil, nil
+	}
+
+	if args.Frequency == "" {
+		return text("Scheduled backups turned off. Backups already written are kept. Deploy the service to apply."), nil, nil
+	}
+	return text("Backup schedule saved. Deploy the service to apply it."), nil, nil
 }
 
 func handleCreateService(
@@ -204,6 +260,17 @@ func handleCreateService(
 		}
 		if args.MySQLRouters != nil {
 			mysql.RouterInstances = *args.MySQLRouters
+		}
+		if args.MySQLRestoreBucket != "" || args.MySQLRestorePath != "" {
+			// Both halves are required: a bucket with no path does not identify a
+			// backup, and a path with no bucket has nowhere to read it from.
+			if args.MySQLRestoreBucket == "" || args.MySQLRestorePath == "" {
+				return text("restoring needs both mysql_restore_bucket and mysql_restore_path"), nil, nil
+			}
+			mysql.Restore = &cloud.MySQLRestoreInput{
+				BucketSvcSlug: args.MySQLRestoreBucket,
+				Path:          args.MySQLRestorePath,
+			}
 		}
 		in.MySQL = mysql
 	case cloud.ServiceTypeS3Bucket:
@@ -815,13 +882,18 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
+		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. A mysql service may be seeded from a backup with mysql_restore_bucket and mysql_restore_path — only at creation; an existing database cannot be restored into. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
 	addTool(s, &mcp.Tool{
 		Name:        "update-service",
 		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables native rolling deployments; without one deployments use Recreate. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
 	}, handleUpdateService)
+
+	addTool(s, &mcp.Tool{
+		Name:        "configure-mysql-backup",
+		Description: "Configure scheduled backups for a managed MySQL service, or turn them off with an empty frequency. Backups are periodic dumps, not continuous archiving: recovery points are the backups that have run, and there is no point-in-time recovery. Restoring is not yet available. Changes apply on the next deploy.",
+	}, handleConfigureMySQLBackup)
 
 	addTool(s, &mcp.Tool{
 		Name:        "delete-service",

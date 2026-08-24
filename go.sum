@@ -16,6 +16,10 @@ github.com/simplifyd-systems/cloud-go-sdk v0.1.20 h1:8enULH8h2ZPs7s9iniDTeaVtEaU
 github.com/simplifyd-systems/cloud-go-sdk v0.1.20/go.mod h1:xGZcsclaGrheCfJCnZyQEynoPBpaPhpuIatM4QzSf20=
 github.com/simplifyd-systems/cloud-go-sdk v0.1.22 h1:ymo6DEQILPRXc6GWHXdPUAL9ypT6RWVT1FobYcgJgdo=
 github.com/simplifyd-systems/cloud-go-sdk v0.1.22/go.mod h1:xGZcsclaGrheCfJCnZyQEynoPBpaPhpuIatM4QzSf20=
+github.com/simplifyd-systems/cloud-go-sdk v0.1.23 h1:bwtynWMEkWGVkwnBYBLe+kNmOYlB5KesZJ1IE/mO2Rc=
+github.com/simplifyd-systems/cloud-go-sdk v0.1.23/go.mod h1:xGZcsclaGrheCfJCnZyQEynoPBpaPhpuIatM4QzSf20=
+github.com/simplifyd-systems/cloud-go-sdk v0.1.24 h1:aqRwOU1xWmZ/8km0YfOqXm57CgRWQfswPui0tSO3HCE=
+github.com/simplifyd-systems/cloud-go-sdk v0.1.24/go.mod h1:xGZcsclaGrheCfJCnZyQEynoPBpaPhpuIatM4QzSf20=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 golang.org/x/oauth2 v0.30.0 h1:dnDm7JmhM45NNpd8FDDeLhK6FwqbOf4MLCM9zb1BOHI=
