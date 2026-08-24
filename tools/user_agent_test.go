@@ -32,7 +32,8 @@ func TestSDKClientIdentifiesItselfAsTheMCPServer(t *testing.T) {
 		t.Fatalf("stub API call failed: %v", err)
 	}
 
-	if got := <-seen; got != "cloud-mcp/9.9.9" {
-		t.Fatalf("User-Agent = %q, want %q", got, "cloud-mcp/9.9.9")
+	const want = "edge-mcp/9.9.9"
+	if got := <-seen; got != want {
+		t.Fatalf("User-Agent = %q, want %q", got, want)
 	}
 }

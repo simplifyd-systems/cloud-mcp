@@ -142,12 +142,15 @@ type createServiceArgs struct {
 	Project        string            `json:"project"      jsonschema:"Project slug or name"`
 	Env            string            `json:"env"          jsonschema:"Environment slug or name"`
 	Name           string            `json:"name"         jsonschema:"Service display name"`
-	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
+	Type           string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
 	Image          string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
 	Tag            string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
-	StorageGB      *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres and redis types, 1-1000)"`
+	StorageGB      *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server pod: each server holds a full copy of the data."`
 	Mode           string            `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
 	RedisReplicas  *int              `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
+	MySQLInstances *int              `json:"mysql_instances,omitempty" jsonschema:"Number of MySQL server pods (mysql type only). Group Replication needs a majority to accept writes, so use 1, 3, 5, 7 or 9 — an even count costs a pod without buying failure tolerance. Defaults to 1, a single server with no high availability."`
+	MySQLRouters   *int              `json:"mysql_routers,omitempty"  jsonschema:"Number of MySQL router pods (mysql type only, defaults to 1). Clients connect through the router, never to a server directly. Each router is a separately billed pod, so a 3-server cluster with 1 router bills 4 pods."`
+	MySQLVersion   string            `json:"mysql_version,omitempty"  jsonschema:"MySQL server version (mysql type only, e.g. 8.4.3). Defaults to the platform version; upgrades are never applied implicitly."`
 	BucketName     string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
 	BucketRegion   string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
 	ReadinessProbe *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
@@ -191,6 +194,18 @@ func handleCreateService(
 			redis.Replicas = *args.RedisReplicas
 		}
 		in.Redis = redis
+	case cloud.ServiceTypeMySQL:
+		mysql := &cloud.MySQLInput{Version: args.MySQLVersion}
+		if args.StorageGB != nil {
+			mysql.StorageGB = *args.StorageGB
+		}
+		if args.MySQLInstances != nil {
+			mysql.Instances = *args.MySQLInstances
+		}
+		if args.MySQLRouters != nil {
+			mysql.RouterInstances = *args.MySQLRouters
+		}
+		in.MySQL = mysql
 	case cloud.ServiceTypeS3Bucket:
 		in.S3Bucket = &cloud.S3BucketInput{Name: args.BucketName, Region: args.BucketRegion}
 	case cloud.ServiceTypeStaticSite:
@@ -800,7 +815,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, redis, http_gateway, s3_bucket, or static_site) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
+		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
 	addTool(s, &mcp.Tool{
