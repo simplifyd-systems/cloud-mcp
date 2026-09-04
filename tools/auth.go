@@ -9,7 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	cloud "github.com/simplifyd-systems/cloud-go-sdk"
 
-	"github.com/simplifyd-com/cloud-mcp/client"
+	"github.com/simplifyd-systems/cloud-mcp/client"
 )
 
 // ---- login ----

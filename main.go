@@ -34,7 +34,7 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/simplifyd-com/cloud-mcp/tools"
+	"github.com/simplifyd-systems/cloud-mcp/tools"
 )
 
 const serverName = "simplifyd-cloud-mcp"
@@ -70,6 +70,7 @@ func main() {
 	tools.RegisterPostgresExtensionTools(server)
 	tools.RegisterRegistryRetentionTools(server)
 	tools.RegisterStaticSiteTools(server)
+	tools.RegisterVideoTools(server)
 	tools.RegisterDeploymentTools(server)
 	tools.RegisterTokenTools(server)
 

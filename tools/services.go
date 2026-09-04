@@ -769,6 +769,98 @@ func handleDeleteServiceConfig(
 	return text("Service config deleted successfully"), nil, nil
 }
 
+// ---- persistent volumes ----
+//
+// Kept apart from the config mounts above and from the database services'
+// storage_gb, because attaching one changes what the service *is*: a volume is
+// ReadWriteOnce, so the service becomes single-replica and its deploys stop the
+// old pod before starting the new one. Both are enforced by the controller
+// rather than being options, and a caller should be told before it asks.
+
+type addVolumeArgs struct {
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
+	Service   string `json:"service"    jsonschema:"Service slug"`
+	Name      string `json:"name"       jsonschema:"Volume display name, e.g. data"`
+	MountPath string `json:"mount_path" jsonschema:"Absolute path where the volume is mounted in the container, e.g. /data"`
+	SizeGB    int    `json:"size_gb"    jsonschema:"Size in GB (1-1000). It can be raised later but never lowered - Kubernetes cannot shrink a volume."`
+}
+
+func handleAddServiceVolume(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args addVolumeArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	vol, err := services(api, args.Workspace, args.Project, args.Env).Volumes(args.Service).Create(ctx, cloud.CreateVolumeInput{
+		Name:      args.Name,
+		MountPath: args.MountPath,
+		SizeGB:    args.SizeGB,
+	})
+	if err != nil {
+		return apiErr("add service volume", err), nil, nil
+	}
+	return jsonText(vol), nil, nil
+}
+
+type updateVolumeArgs struct {
+	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"    jsonschema:"Project slug or name"`
+	Env       string `json:"env"        jsonschema:"Environment slug or name"`
+	Service   string `json:"service"    jsonschema:"Service slug"`
+	Volume    string `json:"volume"     jsonschema:"Volume slug to update"`
+	Name      string `json:"name"       jsonschema:"Volume display name"`
+	MountPath string `json:"mount_path" jsonschema:"Absolute mount path in the container"`
+	SizeGB    int    `json:"size_gb"    jsonschema:"Size in GB (1-1000). Raising it grows the volume on the next deploy; a smaller value is ignored rather than shrinking and losing data."`
+}
+
+func handleUpdateServiceVolume(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args updateVolumeArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	vol, err := services(api, args.Workspace, args.Project, args.Env).Volumes(args.Service).Update(ctx, args.Volume, cloud.UpdateVolumeInput{
+		Name:      args.Name,
+		MountPath: args.MountPath,
+		SizeGB:    args.SizeGB,
+	})
+	if err != nil {
+		return apiErr("update service volume", err), nil, nil
+	}
+	return jsonText(vol), nil, nil
+}
+
+type deleteVolumeArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
+	Service   string `json:"service"   jsonschema:"Service slug"`
+	Volume    string `json:"volume"    jsonschema:"Volume slug to detach"`
+}
+
+func handleDeleteServiceVolume(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args deleteVolumeArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	if err := services(api, args.Workspace, args.Project, args.Env).Volumes(args.Service).Delete(ctx, args.Volume); err != nil {
+		return apiErr("delete service volume", err), nil, nil
+	}
+	return text("Volume detached. Its data is kept until the service is deleted."), nil, nil
+}
+
 // ---- changesets ----
 
 func handleApproveChangeset(
@@ -963,6 +1055,21 @@ func RegisterServiceTools(s *mcp.Server) {
 		Name:        "delete-service-config",
 		Description: "Delete a config file mount from a service.",
 	}, handleDeleteServiceConfig)
+
+	addTool(s, &mcp.Tool{
+		Name:        "add-service-volume",
+		Description: "Attach a persistent volume to a docker service. Unlike ephemeral storage its contents survive restarts, redeploys and node failures. Attaching one pins the service to a single replica and switches its deploys to stop-then-start (a few seconds of downtime), because the volume can be attached by only one pod at a time. Takes effect on the next deploy.",
+	}, handleAddServiceVolume)
+
+	addTool(s, &mcp.Tool{
+		Name:        "update-service-volume",
+		Description: "Update a persistent volume on a service (name, mount path and size are all required). The size can be raised but never lowered.",
+	}, handleUpdateServiceVolume)
+
+	addTool(s, &mcp.Tool{
+		Name:        "delete-service-volume",
+		Description: "Detach a persistent volume from a service. The data is kept and is removed only when the service itself is deleted, so a volume detached by mistake can be reattached at the same mount path.",
+	}, handleDeleteServiceVolume)
 
 	addTool(s, &mcp.Tool{
 		Name:        "approve-service-changeset",

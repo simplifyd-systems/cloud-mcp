@@ -1,4 +1,4 @@
-module github.com/simplifyd-com/cloud-mcp
+module github.com/simplifyd-systems/cloud-mcp
 
 go 1.23.0
 
