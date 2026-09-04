@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -32,6 +33,7 @@ type uploadVideoArgs struct {
 	Library   string `json:"library"   jsonschema:"Video library name. An existing video service with this name is reused; otherwise one is created."`
 	Path      string `json:"path"      jsonschema:"Absolute path to the video file on the machine running this MCP server. Bytes are uploaded directly to storage, so the file is never read into the conversation."`
 	Title     string `json:"title,omitempty" jsonschema:"Title for the video. Defaults to the file name."`
+	Resume    string `json:"resume,omitempty" jsonschema:"Video id of an interrupted upload to finish. Only the parts that did not arrive are sent, so a large file is not uploaded again from the start. Pass the same path as the original attempt; the file size is checked against what the upload was registered with."`
 	Wait      *bool  `json:"wait,omitempty"  jsonschema:"Wait for encoding to finish so the returned embed snippet works immediately. Default true. Encoding a long file can take several minutes."`
 	MaxHeight int    `json:"max_height,omitempty" jsonschema:"Ladder ceiling for a newly created library: 720 (default) or 1080. 1080p roughly doubles storage per video for a rung few mobile viewers select."`
 }
@@ -61,8 +63,14 @@ func handleUploadVideo(
 	client := svcs.Video(librarySlug)
 	// No progress callback: there is nowhere to render one in a tool call, and
 	// the bytes are going out over the server's own connection regardless.
-	video, err := client.Upload(ctx, args.Path, args.Title, nil)
+	video, err := client.UploadFile(ctx, args.Path, cloud.UploadOptions{
+		Title:  args.Title,
+		Resume: args.Resume,
+	})
 	if err != nil {
+		if result := interruptedUploadResult(librarySlug, err); result != nil {
+			return result, nil, nil
+		}
 		return apiErr("upload video", err), nil, nil
 	}
 
@@ -307,6 +315,32 @@ func handleSetVideoDomain(
 	return jsonText(out), nil, nil
 }
 
+// interruptedUploadResult reports an upload that stopped partway, or nil if the
+// error is anything else.
+//
+// It exists because apiErr redacts detail by design, and what it would redact
+// here is the one thing the caller needs: the video id that turns re-uploading
+// several gigabytes into sending the handful of parts that are missing. An
+// agent moving a library of a few hundred files will hit this repeatedly, and
+// without the id it can only start each interrupted file again.
+func interruptedUploadResult(librarySlug string, err error) *mcp.CallToolResult {
+	var interrupted *cloud.UploadError
+	if !errors.As(err, &interrupted) || interrupted.Abandoned {
+		return nil
+	}
+	return jsonText(map[string]any{
+		"service":      librarySlug,
+		"video":        interrupted.VideoSlug,
+		"status":       "upload_interrupted",
+		"stored_parts": interrupted.StoredParts,
+		"total_parts":  interrupted.PartCount,
+		"next_step": fmt.Sprintf(
+			"%d of %d parts are stored and will not be sent again. Call upload-video "+
+				"again with the same path and resume=%s to send the rest.",
+			interrupted.StoredParts, interrupted.PartCount, interrupted.VideoSlug),
+	})
+}
+
 // RegisterVideoTools adds the video library tools to the server.
 func RegisterVideoTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
@@ -314,6 +348,9 @@ func RegisterVideoTools(s *mcp.Server) {
 		Description: "Upload a video to Simplifyd and get an embeddable player back. Creates the video library " +
 			"if one with this name does not exist. The file is read from a path on the machine running this " +
 			"server and uploaded straight to storage, so its size is not bounded by the conversation. " +
+			"Parts are sent several at a time and retried individually. If the upload is interrupted the " +
+			"parts already stored are kept and a video id is returned; calling again with resume set to it " +
+			"sends only what is missing, which is what makes uploading a large library practical. " +
 			"Waits for encoding by default, so the returned embed snippet works immediately. " +
 			"Playback is served from the platform's zero-rated address, which means watching costs the viewer " +
 			"no data on supported Nigerian networks — the reason to host video here rather than on YouTube.",
