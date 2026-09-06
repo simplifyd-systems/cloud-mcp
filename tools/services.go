@@ -153,6 +153,9 @@ type createServiceArgs struct {
 	MySQLVersion       string            `json:"mysql_version,omitempty"  jsonschema:"MySQL server version (mysql type only, e.g. 8.4.3). Defaults to the platform version; upgrades are never applied implicitly."`
 	MySQLRestoreBucket string            `json:"mysql_restore_bucket,omitempty" jsonschema:"Slug or name of a Simplifyd bucket service holding a backup to seed the new database from (mysql type only). Must be in the same project and environment. Requires mysql_restore_path."`
 	MySQLRestorePath   string            `json:"mysql_restore_path,omitempty"   jsonschema:"Path to ONE backup inside that bucket, e.g. /mysql/orders/2026-08-24T02-00-00Z (mysql type only). Not the folder holding all backups: a path with no backup in it loads nothing and the database silently starts up empty. Restoring is only possible when a database is created."`
+	PostgresRestoreFromService string    `json:"postgres_restore_from_service,omitempty" jsonschema:"Slug or name of a Postgres service whose backups should seed the new database (postgres type only). The archive location and credentials are read from that service, so only its slug is needed. The source only has to have backups configured — its cluster does not have to be healthy or hold any data, which is what makes this the way to recover a database that was destroyed. Restoring is only possible when a service is created; an existing database cannot be restored into."`
+	PostgresRestoreBackupID    string    `json:"postgres_restore_backup_id,omitempty"    jsonschema:"Select one base backup to restore, e.g. 20260905T020000 (postgres type only). Omit this and postgres_restore_target_time to recover to the end of the archived WAL, which is the most recent point available and usually what you want. Requires postgres_restore_from_service."`
+	PostgresRestoreTargetTime  string    `json:"postgres_restore_target_time,omitempty"  jsonschema:"Recover to a point in time, RFC3339, e.g. 2026-09-05T18:55:00Z (postgres type only). Cannot be earlier than the archive's first recoverability point. Give this or postgres_restore_backup_id, never both. Requires postgres_restore_from_service."`
 	BucketName         string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
 	BucketRegion       string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
 	ReadinessProbe     *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
@@ -239,6 +242,22 @@ func handleCreateService(
 		pg := &cloud.PostgresInput{Mode: args.Mode}
 		if args.StorageGB != nil {
 			pg.StorageGB = *args.StorageGB
+		}
+		if args.PostgresRestoreBackupID != "" && args.PostgresRestoreTargetTime != "" {
+			// Two recovery targets describe two different points; the server
+			// rejects the pair rather than guessing which was meant.
+			return text("give postgres_restore_backup_id or postgres_restore_target_time, not both"), nil, nil
+		}
+		if args.PostgresRestoreFromService == "" &&
+			(args.PostgresRestoreBackupID != "" || args.PostgresRestoreTargetTime != "") {
+			return text("a recovery target needs postgres_restore_from_service to say which archive to read"), nil, nil
+		}
+		if args.PostgresRestoreFromService != "" {
+			pg.RestoreFromService = &cloud.PostgresRestoreFromServiceInput{
+				SvcSlug:    args.PostgresRestoreFromService,
+				BackupID:   args.PostgresRestoreBackupID,
+				TargetTime: args.PostgresRestoreTargetTime,
+			}
 		}
 		in.Postgres = pg
 	case cloud.ServiceTypeRedis:
@@ -974,7 +993,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. A mysql service may be seeded from a backup with mysql_restore_bucket and mysql_restore_path — only at creation; an existing database cannot be restored into. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
+		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. A mysql service may be seeded from a backup with mysql_restore_bucket and mysql_restore_path, and a postgres service from another Postgres service's backup archive with postgres_restore_from_service — both only at creation; an existing database cannot be restored into, so recovering one means creating a new service from its backups and moving traffic to it. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
 	addTool(s, &mcp.Tool{
