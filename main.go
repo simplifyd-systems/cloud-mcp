@@ -73,6 +73,7 @@ func main() {
 	tools.RegisterVideoTools(server)
 	tools.RegisterDeploymentTools(server)
 	tools.RegisterTokenTools(server)
+	tools.RegisterAlertTools(server)
 
 	if local {
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
