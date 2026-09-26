@@ -2,6 +2,11 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -15,6 +20,7 @@ const (
 func templateRoutes() map[string]string {
 	supabase := `{"slug":"` + supabaseSlug + `","name":"Supabase","status":"published","services":[
 		{"key":"supabase_db","type":"docker","vcpus":2,"memory":2048,"docker":{"image":"supabase/postgres","tag":"17.6.1.136"},
+		 "init_sql_path":"/docker-entrypoint-initdb.d/migrations/zz-init.sql",
 		 "persistent_storages":[{"name":"postgres","mount_path":"/var/lib/postgresql","size_gb":20}]},
 		{"key":"supabase_gateway","type":"docker","vcpus":1,"memory":256,"ingress":[{"port":8000,"protocol":"HTTP"}]}]}`
 	return map[string]string{
@@ -88,9 +94,146 @@ func TestDescribeTemplateSurvivesRedaction(t *testing.T) {
 	}
 	result := jsonText(describeTemplate(found.template, found.source))
 	out := resultText(t, result)
-	for _, want := range []string{`"service": "supabase_db"`, `"image": "supabase/postgres:17.6.1.136"`, `"disk_gb": 20`, `"public": true`, `"vcpus": 3`, `"memory_mb": 2304`} {
+	for _, want := range []string{`"service": "supabase_db"`, `"image": "supabase/postgres:17.6.1.136"`, `"disk_gb": 20`, `"public": true`, `"vcpus": 3`, `"memory_mb": 2304`, `"init_sql_service": "supabase_db"`} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %s:\n%s", want, out)
+		}
+	}
+}
+
+// deployAPI stubs the API for deploy-template, recording the deploy request.
+func deployAPI(t *testing.T, deployed *map[string]any) {
+	t.Helper()
+	routes := templateRoutes()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/deploy") {
+			body, _ := io.ReadAll(r.Body)
+			_ = json.Unmarshal(body, deployed)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte(`{"services":[{"slug":"s1","name":"supabase_db"},{"slug":"s2","name":"supabase_gateway"}],
+				"outputs":[{"service":"supabase_gateway","name":"ANON_KEY","value":"eyJhbGciOi.anon","description":"Public API key"},
+				           {"service":"supabase_gateway","name":"SUPABASE_PUBLIC_URL","value":"https://x-production.simplifyd.app"}]}`))
+			return
+		}
+		body, ok := routes[r.URL.Path]
+		if !ok {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"message":"not found"}`))
+			return
+		}
+		_, _ = w.Write([]byte(body))
+	}))
+	t.Cleanup(ts.Close)
+	t.Setenv("SIMPLIFYD_API_URL", ts.URL)
+}
+
+// Publishable outputs come back with their values, so an assistant can
+// configure a client; the init SQL reaches the API.
+func TestDeployTemplateOutputsAndInitSQL(t *testing.T) {
+	var deployed map[string]any
+	deployAPI(t, &deployed)
+
+	result, _, err := handleDeployTemplate(context.Background(), httpRequest("Bearer x"), deployTemplateArgs{
+		Workspace: wsSlug, Project: projSlug, Env: envSlug, Template: "Supabase",
+		InitSQL: "create table orders (id int);",
+	})
+	if err != nil || result.IsError {
+		t.Fatalf("deploy-template: %v %s", err, resultText(t, result))
+	}
+	if deployed["init_sql"] != "create table orders (id int);" || deployed["project"] != projSlug {
+		t.Errorf("deploy body = %v", deployed)
+	}
+	out := resultText(t, result)
+	for _, want := range []string{`"value": "eyJhbGciOi.anon"`, `"value": "https://x-production.simplifyd.app"`, `"name": "supabase_gateway"`, `init_sql applied`} {
+		if !strings.Contains(out, want) {
+			t.Errorf("output missing %s:\n%s", want, out)
+		}
+	}
+}
+
+func TestDeployTemplateRefusesInitSQLItCannotTake(t *testing.T) {
+	var deployed map[string]any
+	deployAPI(t, &deployed)
+
+	result, _, _ := handleDeployTemplate(context.Background(), httpRequest("Bearer x"), deployTemplateArgs{
+		Workspace: wsSlug, Project: projSlug, Env: envSlug, Template: "Internal API",
+		InitSQL: "create table t ();",
+	})
+	if !result.IsError || !strings.Contains(resultText(t, result), "does not take init_sql") {
+		t.Fatalf("result = %s", resultText(t, result))
+	}
+	if deployed != nil {
+		t.Errorf("deployed anyway: %v", deployed)
+	}
+}
+
+func TestGetPublishableVariables(t *testing.T) {
+	path := "/v1/workspaces/" + wsSlug + "/projects/" + projSlug + "/envs/" + envSlug + "/publishable-variables"
+	for _, c := range []struct{ body, want string }{
+		{`[{"service_slug":"s","service":"supabase_gateway","name":"ANON_KEY","value":"eyJhbGciOi.anon"}]`, `"value": "eyJhbGciOi.anon"`},
+		{`[]`, "no publishable variables"},
+	} {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != path {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(c.body))
+		}))
+		t.Setenv("SIMPLIFYD_API_URL", ts.URL)
+		result, _, err := handleGetPublishableVariables(context.Background(), httpRequest("Bearer x"), envArgs{Workspace: wsSlug, Project: projSlug, Env: envSlug})
+		ts.Close()
+		if err != nil || result.IsError {
+			t.Fatalf("get-publishable-variables: %v %s", err, resultText(t, result))
+		}
+		if out := resultText(t, result); !strings.Contains(out, c.want) {
+			t.Errorf("output missing %s:\n%s", c.want, out)
+		}
+	}
+}
+
+// A new variable is sent without sealed, so the API seals it; sealed false is
+// passed through, for a create and for an update.
+func TestAddServiceVariableSealed(t *testing.T) {
+	base := "/v1/workspaces/" + wsSlug + "/projects/" + projSlug + "/envs/" + envSlug + "/svcs/svc-1/variables"
+	for _, c := range []struct {
+		existing string
+		sealed   *bool
+		want     string
+	}{
+		{`[]`, nil, `absent`},
+		{`[]`, new(bool), `false`},
+		{`[{"slug":"v1","name":"PW","sealed":true}]`, new(bool), `false`},
+	} {
+		var body map[string]any
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == base:
+				_, _ = w.Write([]byte(c.existing))
+			case (r.Method == http.MethodPost && r.URL.Path == base) || (r.Method == http.MethodPut && r.URL.Path == base+"/v1"):
+				_ = json.NewDecoder(r.Body).Decode(&body)
+				_, _ = w.Write([]byte(`{"slug":"v1","name":"PW"}`))
+			default:
+				w.WriteHeader(http.StatusNotFound)
+			}
+		}))
+		t.Setenv("SIMPLIFYD_API_URL", ts.URL)
+		result, _, err := handleAddServiceVariable(context.Background(), httpRequest("Bearer x"), addSvcVarArgs{
+			Workspace: wsSlug, Project: projSlug, Env: envSlug, Service: "svc-1", Name: "PW", Value: "x", Sealed: c.sealed,
+		})
+		ts.Close()
+		if err != nil || result.IsError {
+			t.Fatalf("add-service-variable: %v %s", err, resultText(t, result))
+		}
+		got := "absent"
+		if v, ok := body["sealed"]; ok {
+			got = fmt.Sprint(v)
+		}
+		if got != c.want {
+			t.Errorf("existing %s, sealed %v: sent sealed %s, want %s", c.existing, c.sealed, got, c.want)
 		}
 	}
 }
