@@ -145,11 +145,11 @@ type createServiceArgs struct {
 	Type               string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
 	Image              string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
 	Tag                string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
-	StorageGB          *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server pod: each server holds a full copy of the data."`
+	StorageGB          *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server: each server holds a full copy of the data."`
 	Mode               string            `json:"mode,omitempty"           jsonschema:"Postgres: replica or standalone. Redis: standalone, replication, or cluster."`
 	RedisReplicas      *int              `json:"redis_replicas,omitempty" jsonschema:"Number of redis replicas (1-10, redis type only)"`
-	MySQLInstances     *int              `json:"mysql_instances,omitempty" jsonschema:"Number of MySQL server pods (mysql type only). Group Replication needs a majority to accept writes, so use 1, 3, 5, 7 or 9 — an even count costs a pod without buying failure tolerance. Defaults to 1, a single server with no high availability."`
-	MySQLRouters       *int              `json:"mysql_routers,omitempty"  jsonschema:"Number of MySQL router pods (mysql type only, defaults to 1). Clients connect through the router, never to a server directly. Each router is a separately billed pod, so a 3-server cluster with 1 router bills 4 pods."`
+	MySQLInstances     *int              `json:"mysql_instances,omitempty" jsonschema:"Number of MySQL servers (mysql type only). Group Replication needs a majority to accept writes, so use 1, 3, 5, 7 or 9 — an even count costs a server without buying failure tolerance. Defaults to 1, a single server with no high availability."`
+	MySQLRouters       *int              `json:"mysql_routers,omitempty"  jsonschema:"Number of MySQL routers (mysql type only, defaults to 1). Clients connect through the router, never to a server directly. Each router is billed as a separate instance, so a 3-server cluster with 1 router bills 4 instances."`
 	MySQLVersion       string            `json:"mysql_version,omitempty"  jsonschema:"MySQL server version (mysql type only, e.g. 8.4.3). Defaults to the platform version; upgrades are never applied implicitly."`
 	MySQLRestoreBucket string            `json:"mysql_restore_bucket,omitempty" jsonschema:"Slug or name of a Simplifyd bucket service holding a backup to seed the new database from (mysql type only). Must be in the same project and environment. Requires mysql_restore_path."`
 	MySQLRestorePath   string            `json:"mysql_restore_path,omitempty"   jsonschema:"Path to ONE backup inside that bucket, e.g. /mysql/orders/2026-08-24T02-00-00Z (mysql type only). Not the folder holding all backups: a path with no backup in it loads nothing and the database silently starts up empty. Restoring is only possible when a database is created."`
@@ -158,7 +158,7 @@ type createServiceArgs struct {
 	PostgresRestoreTargetTime  string    `json:"postgres_restore_target_time,omitempty"  jsonschema:"Recover to a point in time, RFC3339, e.g. 2026-09-05T18:55:00Z (postgres type only). Cannot be earlier than the archive's first recoverability point. Give this or postgres_restore_backup_id, never both. Requires postgres_restore_from_service."`
 	BucketName         string            `json:"bucket_name,omitempty"    jsonschema:"Bucket name (s3_bucket type only)"`
 	BucketRegion       string            `json:"bucket_region,omitempty"  jsonschema:"Bucket region (s3_bucket type only)"`
-	ReadinessProbe     *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables native rolling deployments"`
+	ReadinessProbe     *serviceProbeArgs `json:"readiness_probe,omitempty" jsonschema:"Optional HTTP readiness probe for a Docker service; enables zero-downtime rolling deploys"`
 }
 
 type configureMySQLBackupArgs struct {
@@ -816,7 +816,7 @@ type addVolumeArgs struct {
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Name      string `json:"name"       jsonschema:"Volume display name, e.g. data"`
 	MountPath string `json:"mount_path" jsonschema:"Absolute path where the volume is mounted in the container, e.g. /data"`
-	SizeGB    int    `json:"size_gb"    jsonschema:"Size in GB (1-1000). It can be raised later but never lowered - Kubernetes cannot shrink a volume."`
+	SizeGB    int    `json:"size_gb"    jsonschema:"Size in GB (1-1000). It can be raised later but never lowered."`
 }
 
 func handleAddServiceVolume(
@@ -1011,7 +1011,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "update-service",
-		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables native rolling deployments; without one deployments use Recreate. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
+		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables zero-downtime rolling deploys; without one, each deploy stops the old version before starting the new one. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
 	}, handleUpdateService)
 
 	addTool(s, &mcp.Tool{
@@ -1090,17 +1090,17 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "add-service-volume",
-		Description: "Attach a persistent volume to a docker service. Unlike ephemeral storage its contents survive restarts, redeploys and node failures. Attaching one pins the service to a single replica and switches its deploys to stop-then-start (a few seconds of downtime), because the volume can be attached by only one pod at a time. Takes effect on the next deploy.",
+		Description: "Attach a volume to a docker service. Unlike ephemeral storage its contents survive restarts and redeploys. A service with a volume runs as a single instance and its deploys stop the old version before starting the new one (a few seconds of downtime), because a volume can be used by only one instance at a time. Takes effect on the next deploy.",
 	}, handleAddServiceVolume)
 
 	addTool(s, &mcp.Tool{
 		Name:        "update-service-volume",
-		Description: "Update a persistent volume on a service (name, mount path and size are all required). The size can be raised but never lowered.",
+		Description: "Update a volume on a service (name, mount path and size are all required). The size can be raised but never lowered. Pass the existing name unchanged: the data belongs to the name, so renaming a volume attaches a new, empty one.",
 	}, handleUpdateServiceVolume)
 
 	addTool(s, &mcp.Tool{
 		Name:        "delete-service-volume",
-		Description: "Detach a persistent volume from a service. The data is kept and is removed only when the service itself is deleted, so a volume detached by mistake can be reattached at the same mount path.",
+		Description: "Detach a volume from a service. The data is kept and is removed only when the service itself is deleted, so a volume detached by mistake can be reattached by adding a volume with the same name.",
 	}, handleDeleteServiceVolume)
 
 	addTool(s, &mcp.Tool{

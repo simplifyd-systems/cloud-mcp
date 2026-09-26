@@ -69,7 +69,7 @@ func handleListAlerts(
 func RegisterAlertTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "list-alerts",
-		Description: "List operational alerts for a workspace. Currently persistent volumes that have reached a utilisation threshold (50%, 75% or 90% full), worst first. " +
+		Description: "List operational alerts for a workspace. Currently volumes that have reached a utilisation threshold (50%, 75% or 90% full), worst first. " +
 			"Each entry gives the service, its project and environment, disk used and provisioned, the percentage, and the threshold band. " +
 			"Use this to check whether any database or service is running out of disk before it starts failing writes.",
 	}, handleListAlerts)
