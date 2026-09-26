@@ -18,7 +18,7 @@ over either **stdio** (a local client launches the binary as a subprocess) or
 | **Services** | `list-services`, `get-service`, `create-service`, `update-service`, `delete-service`, `list-private-service-access`, `grant-private-service-access`, `revoke-private-service-access`, `list-service-variables`, `add-service-variable`, `set-service-variables`, `delete-service-variable`, `add-service-ingress`, `delete-service-ingress`, `add-tcp-proxy`, `delete-tcp-proxy`, `set-ingress-source-ranges`, `add-service-config`, `update-service-config`, `delete-service-config`, `approve-service-changeset`, `discard-service-changeset`, `add-shared-variable` |
 | **Deployments** | `list-deployments`, `get-deployment`, `deploy-service`, `redeploy-service`, `undeploy-service`, `get-deployment-logs` |
 | **Tokens** | `list-tokens`, `create-token`, `delete-token` |
-| **Templates** | `list-templates`, `get-template`, `deploy-template` |
+| **Templates** | `list-templates`, `get-template`, `deploy-template`, `get-publishable-variables` |
 
 ## Build
 

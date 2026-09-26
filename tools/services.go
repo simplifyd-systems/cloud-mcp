@@ -478,6 +478,7 @@ type addSvcVarArgs struct {
 	Service   string `json:"service"    jsonschema:"Service slug"`
 	Name      string `json:"name"       jsonschema:"Variable name"`
 	Value     string `json:"value"      jsonschema:"Variable value"`
+	Sealed    *bool  `json:"sealed,omitempty" jsonschema:"Optional. Omitted: a new variable is sealed (its value can never be read back by anyone) and an existing one stays as it is. false: the user can reveal the value in the dashboard; use it only for a value the user will need to read, such as a login they chose you to generate"`
 }
 
 func handleAddServiceVariable(
@@ -492,13 +493,25 @@ func handleAddServiceVariable(
 	vars := services(api, args.Workspace, args.Project, args.Env).Variables(args.Service)
 	// Upsert: the API's create endpoint rejects duplicate names.
 	if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
-		v, err := vars.Update(ctx, slug, args.Value)
+		update := vars.Update
+		if args.Sealed != nil {
+			update = func(ctx context.Context, slug, value string) (*cloud.Variable, error) {
+				return vars.UpdateSealed(ctx, slug, value, *args.Sealed)
+			}
+		}
+		v, err := update(ctx, slug, args.Value)
 		if err != nil {
 			return apiErr("update service variable", err), nil, nil
 		}
 		return jsonText(v), nil, nil
 	}
-	v, err := vars.Set(ctx, args.Name, args.Value)
+	set := vars.Set
+	if args.Sealed != nil {
+		set = func(ctx context.Context, name, value string) (*cloud.Variable, error) {
+			return vars.SetSealed(ctx, name, value, *args.Sealed)
+		}
+	}
+	v, err := set(ctx, args.Name, args.Value)
 	if err != nil {
 		return apiErr("add service variable", err), nil, nil
 	}
@@ -1017,17 +1030,17 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "list-service-variables",
-		Description: "List all environment variables set directly on a service.",
+		Description: "List all environment variables set directly on a service: names, and whether each is sealed or publishable. Values are never returned here. A sealed value can never be read by anyone; an unsealed one is revealed by the user in the Simplifyd dashboard, and publishable ones are returned by get-publishable-variables.",
 	}, handleListServiceVariables)
 
 	addTool(s, &mcp.Tool{
 		Name:        "add-service-variable",
-		Description: "Add a single environment variable to a service.",
+		Description: "Add a single environment variable to a service, or replace an existing one's value. New variables are sealed: the service gets the value but nobody can read it back. Pass sealed false only for a value the user must be able to reveal later.",
 	}, handleAddServiceVariable)
 
 	addTool(s, &mcp.Tool{
 		Name:        "set-service-variables",
-		Description: "Bulk-set environment variables on a service (replaces all existing variables with the provided map).",
+		Description: "Bulk-set environment variables on a service (replaces all existing variables with the provided map). New variables are sealed; existing ones stay sealed or not as they were.",
 	}, handleSetServiceVariables)
 
 	addTool(s, &mcp.Tool{
