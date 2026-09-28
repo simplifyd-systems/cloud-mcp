@@ -315,7 +315,7 @@ type updateServiceArgs struct {
 	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, readiness_probe, or delete_readiness_probe"`
 	Name             string            `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
 	VCPUs            uint              `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
-	Replicas         uint              `json:"replicas,omitempty"       jsonschema:"Number of Docker service replicas, 1-10 (action: replicas)"`
+	Replicas         uint              `json:"replicas,omitempty"       jsonschema:"action: replicas. Docker: number of replicas, 1-8. Postgres: number of instances, 1-3 — a primary plus standbys on separate servers that take over if it fails; more than 1 needs a funded workspace."`
 	Memory           uint              `json:"memory,omitempty"         jsonschema:"Memory in MiB (action: memory)"`
 	Image            string            `json:"image,omitempty"          jsonschema:"Docker image without tag, e.g. nginx (action: image)"`
 	Tag              string            `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
