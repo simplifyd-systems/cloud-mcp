@@ -71,6 +71,7 @@ func main() {
 	tools.RegisterRegistryRetentionTools(server)
 	tools.RegisterStaticSiteTools(server)
 	tools.RegisterVideoTools(server)
+	tools.RegisterEmailTools(server)
 	tools.RegisterDeploymentTools(server)
 	tools.RegisterTokenTools(server)
 	tools.RegisterAlertTools(server)

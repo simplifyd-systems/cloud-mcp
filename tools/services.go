@@ -142,7 +142,7 @@ type createServiceArgs struct {
 	Project            string            `json:"project"      jsonschema:"Project slug or name"`
 	Env                string            `json:"env"          jsonschema:"Environment slug or name"`
 	Name               string            `json:"name"         jsonschema:"Service display name"`
-	Type               string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site. For static_site prefer the deploy-static-site tool, which creates and publishes in one call."`
+	Type               string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, static_site, or email. For static_site prefer the deploy-static-site tool, which creates and publishes in one call. An email service sends through Why.email; add a domain to it with add-email-domain before anything can be sent."`
 	Image              string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
 	Tag                string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
 	StorageGB          *uint64           `json:"storage_gb,omitempty"    jsonschema:"Storage in GB (required for postgres, mysql and redis types, 1-1000). For mysql this is per server: each server holds a full copy of the data."`
@@ -296,6 +296,8 @@ func handleCreateService(
 		in.S3Bucket = &cloud.S3BucketInput{Name: args.BucketName, Region: args.BucketRegion}
 	case cloud.ServiceTypeStaticSite:
 		in.StaticSite = &cloud.StaticSiteInput{Name: args.Name}
+	case cloud.ServiceTypeEmail:
+		in.Email = &cloud.EmailInput{Name: args.Name}
 	}
 
 	svc, err := services(api, args.Workspace, args.Project, args.Env).Create(ctx, in)
@@ -1006,7 +1008,7 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "create-service",
-		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, or static_site) in an environment. A mysql service may be seeded from a backup with mysql_restore_bucket and mysql_restore_path, and a postgres service from another Postgres service's backup archive with postgres_restore_from_service — both only at creation; an existing database cannot be restored into, so recovering one means creating a new service from its backups and moving traffic to it. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
+		Description: "Create a new service (docker, postgres, mysql, redis, http_gateway, s3_bucket, static_site, or email) in an environment. A mysql service may be seeded from a backup with mysql_restore_bucket and mysql_restore_path, and a postgres service from another Postgres service's backup archive with postgres_restore_from_service — both only at creation; an existing database cannot be restored into, so recovering one means creating a new service from its backups and moving traffic to it. Docker services may include readiness_probe to enable native rolling deployments from the first deploy. To publish an HTML/JS site, use deploy-static-site instead — it creates the site and uploads its files in one call.",
 	}, handleCreateService)
 
 	addTool(s, &mcp.Tool{

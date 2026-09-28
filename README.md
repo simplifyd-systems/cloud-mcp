@@ -19,6 +19,7 @@ over either **stdio** (a local client launches the binary as a subprocess) or
 | **Deployments** | `list-deployments`, `get-deployment`, `deploy-service`, `redeploy-service`, `undeploy-service`, `get-deployment-logs` |
 | **Tokens** | `list-tokens`, `create-token`, `delete-token` |
 | **Templates** | `list-templates`, `get-template`, `deploy-template`, `get-publishable-variables` |
+| **Email** | `list-email-domains`, `add-email-domain`, `verify-email-domain`, `remove-email-domain` — create the service itself with `create-service` and type `email` |
 
 ## Build
 
