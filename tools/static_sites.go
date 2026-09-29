@@ -42,6 +42,7 @@ type deployStaticSiteArgs struct {
 	Domain        string `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on. Requires a CNAME pointing at the returned domain_cname_target."`
 	IndexDocument string `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
 	ErrorDocument string `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
+	SPAFallback   *bool  `json:"spa_fallback,omitempty"   jsonschema:"Set true for a single-page app (React, Vue, Svelte, …) so links to any of its pages load with status 200 rather than 404. Missing files under assets/ and static/ still 404. Omit to keep an existing site's setting."`
 }
 
 func handleDeployStaticSite(
@@ -69,7 +70,7 @@ func handleDeployStaticSite(
 	// A staged archive already lives in a site's bucket, so it can only be
 	// published to that site; creating a new one here would publish nothing.
 	siteSlug, created, failure := resolveStaticSite(ctx, svcs, args.Name,
-		args.IndexDocument, args.ErrorDocument, args.ArchiveKey == "")
+		siteDocuments{args.IndexDocument, args.ErrorDocument, args.SPAFallback}, args.ArchiveKey == "")
 	if failure != nil {
 		return failure, nil, nil
 	}
@@ -139,6 +140,14 @@ func handleDeployStaticSite(
 	return jsonText(out), nil, nil
 }
 
+// siteDocuments are the document settings a call may give. Empty strings and a
+// nil SPAFallback mean "leave as it is".
+type siteDocuments struct {
+	Index       string
+	Error       string
+	SPAFallback *bool
+}
+
 // resolveStaticSite finds a static site by name, creating one when create is
 // set and there is none. Reusing by name is what makes repeated calls update
 // one site rather than creating a new one each time. The document settings are
@@ -146,7 +155,8 @@ func handleDeployStaticSite(
 func resolveStaticSite(
 	ctx context.Context,
 	svcs *cloud.ServicesClient,
-	name, indexDocument, errorDocument string,
+	name string,
+	docs siteDocuments,
 	create bool,
 ) (slug string, created bool, failure *mcp.CallToolResult) {
 	existing, err := svcs.List(ctx)
@@ -170,8 +180,9 @@ func resolveStaticSite(
 			Type: cloud.ServiceTypeStaticSite,
 			StaticSite: &cloud.StaticSiteInput{
 				Name:          name,
-				IndexDocument: indexDocument,
-				ErrorDocument: errorDocument,
+				IndexDocument: docs.Index,
+				ErrorDocument: docs.Error,
+				SPAFallback:   docs.SPAFallback != nil && *docs.SPAFallback,
 			},
 		})
 		if err != nil {
@@ -181,10 +192,11 @@ func resolveStaticSite(
 		return svc.Slug, true, nil
 	}
 
-	if indexDocument != "" || errorDocument != "" {
+	if docs.Index != "" || docs.Error != "" || docs.SPAFallback != nil {
 		if _, err := svcs.StaticSite(slug).SetDocuments(ctx, cloud.UpdateStaticSiteDocumentsInput{
-			IndexDocument: indexDocument,
-			ErrorDocument: errorDocument,
+			IndexDocument: docs.Index,
+			ErrorDocument: docs.Error,
+			SPAFallback:   docs.SPAFallback,
 		}); err != nil {
 			return "", false, apiErr("set static site documents", err)
 		}
@@ -299,6 +311,7 @@ type createStaticSiteUploadArgs struct {
 	Name          string `json:"name"      jsonschema:"Site name. An existing static site with this name is reused; otherwise one is created. Pass the same name to deploy-static-site."`
 	IndexDocument string `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
 	ErrorDocument string `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
+	SPAFallback   *bool  `json:"spa_fallback,omitempty"   jsonschema:"Set true for a single-page app (React, Vue, Svelte, …) so links to any of its pages load with status 200 rather than 404. Missing files under assets/ and static/ still 404. Omit to keep an existing site's setting."`
 }
 
 func handleCreateStaticSiteUpload(
@@ -316,7 +329,7 @@ func handleCreateStaticSiteUpload(
 
 	svcs := services(api, args.Workspace, args.Project, args.Env)
 	siteSlug, created, failure := resolveStaticSite(ctx, svcs, args.Name,
-		args.IndexDocument, args.ErrorDocument, true)
+		siteDocuments{args.IndexDocument, args.ErrorDocument, args.SPAFallback}, true)
 	if failure != nil {
 		return failure, nil, nil
 	}
@@ -467,6 +480,7 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 			"Prefer a zip over listing files one by one for anything beyond a few files, such as a build " +
 			"output directory; a single wrapping directory like dist/ is removed so the site serves at its root. " +
 			"By default the publish is a full replace, so calling this again with the updated site redeploys it. " +
+			"For a single-page app built with React, Vue, Svelte or similar, set spa_fallback so its deep links load. " +
 			"Returns the live URL. Inline binary files (images, fonts) must be sent with encoding=base64.",
 	}, handleDeployStaticSite)
 
