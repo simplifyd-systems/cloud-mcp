@@ -39,9 +39,9 @@ import (
 
 const serverName = "simplifyd-cloud-mcp"
 
-// Overridden at build time via -ldflags -X main.serverVersion; keep in step
-// with VERSION in the Makefile so a plain `go build` reports the truth.
-var serverVersion = "0.0.3"
+// Overridden at build time via -ldflags -X main.serverVersion, which the
+// Makefile derives from git; a plain `go build` reports "dev".
+var serverVersion = "dev"
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "--version" {

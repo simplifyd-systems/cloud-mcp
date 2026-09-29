@@ -1,4 +1,14 @@
-VERSION ?= 0.0.3
+# The version comes from git so every commit builds a distinct image tag:
+# 0.0.31 on a tagged commit, 0.0.31-4-gd9c4fd8 on one after it, with -dirty
+# appended for uncommitted changes. `make deploy` only rolls the pods when the
+# image changes, so a fixed tag here meant deploys silently kept the old build.
+# The newest tag is named explicitly because plain `git describe` picks
+# arbitrarily between tags that share a commit.
+LATEST_TAG := $(shell git tag --list 'v*' --sort=-v:refname | head -1)
+VERSION ?= $(shell git describe --tags --dirty --match '$(LATEST_TAG)' 2>/dev/null | sed 's/^v//')
+ifeq ($(VERSION),)
+VERSION := dev
+endif
 REGISTRY ?= image-hub.simplifyd.dev/cloud
 IMAGE ?= $(REGISTRY)/cloud-mcp:$(VERSION)
 IMAGE_LATEST ?= $(REGISTRY)/cloud-mcp:latest
