@@ -719,6 +719,60 @@ func handleDeleteTCPProxy(
 
 // ---- service configs ----
 
+// The API has no separate read endpoint for config mounts: they come back,
+// content included, as part of the service. These tools read them from there.
+// Listing keeps the usual content redaction; get-service-config is the one
+// place a config's content is disclosed, and only when asked for by name.
+
+func handleListServiceConfigs(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args svcArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	svc, err := services(api, args.Workspace, args.Project, args.Env).Get(ctx, args.Service)
+	if err != nil {
+		return apiErr("list service configs", err), nil, nil
+	}
+	cfgs := svc.Configs
+	if cfgs == nil {
+		cfgs = []cloud.ServiceConfig{}
+	}
+	return jsonText(cfgs), nil, nil
+}
+
+type getConfigArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
+	Service   string `json:"service"   jsonschema:"Service slug"`
+	Config    string `json:"config"    jsonschema:"Config slug, display name, or mount path"`
+}
+
+func handleGetServiceConfig(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args getConfigArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	svc, err := services(api, args.Workspace, args.Project, args.Env).Get(ctx, args.Service)
+	if err != nil {
+		return apiErr("get service config", err), nil, nil
+	}
+	for _, c := range svc.Configs {
+		if c.Slug == args.Config || c.Name == args.Config || c.MountPath == args.Config {
+			return jsonTextRaw(c), nil, nil
+		}
+	}
+	return errResult("no config %q on service %q; use list-service-configs to see its configs", args.Config, args.Service), nil, nil
+}
+
 type addConfigArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
@@ -1074,6 +1128,16 @@ func RegisterServiceTools(s *mcp.Server) {
 		Name:        "delete-tcp-proxy",
 		Description: "Remove a TCP proxy from a service by container port.",
 	}, handleDeleteTCPProxy)
+
+	addTool(s, &mcp.Tool{
+		Name:        "list-service-configs",
+		Description: "List the static config file mounts on a service: slug, name, and mount path. File content is not included; read one with get-service-config.",
+	}, handleListServiceConfigs)
+
+	addTool(s, &mcp.Tool{
+		Name:        "get-service-config",
+		Description: "Read one static config file mount on a service, including its full content, by slug, name, or mount path. Content is returned as stored, so ${{VAR_NAME}} references appear unresolved.",
+	}, handleGetServiceConfig)
 
 	addTool(s, &mcp.Tool{
 		Name:        "add-service-config",
