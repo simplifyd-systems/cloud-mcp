@@ -1106,7 +1106,10 @@ func RegisterServiceTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "add-service-ingress",
-		Description: "Create an HTTP/gRPC ingress rule for a service (exposes it via a public URL on Cloudflare DNS).",
+		Description: "Create an HTTP/gRPC ingress rule for a service (exposes it via a public URL on Cloudflare DNS). " +
+			"A custom_fqdn in a DNS zone the workspace hosts here (see list-dns-zones) gets its DNS record added automatically: " +
+			"its entry in the result then has dns_zone set, and no record should be added by hand. " +
+			"Otherwise the user must point a CNAME for it at the returned cname.",
 	}, handleAddServiceIngress)
 
 	addTool(s, &mcp.Tool{
