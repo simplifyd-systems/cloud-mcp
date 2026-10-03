@@ -20,6 +20,8 @@ over either **stdio** (a local client launches the binary as a subprocess) or
 | **Tokens** | `list-tokens`, `create-token`, `delete-token` |
 | **Templates** | `list-templates`, `get-template`, `deploy-template`, `get-publishable-variables` |
 | **Email** | `list-email-domains`, `add-email-domain`, `verify-email-domain`, `remove-email-domain` — create the service itself with `create-service` and type `email` |
+| **Domains** | `search-domains`, `quote-domain`, `list-domains`, `get-domain`, `register-domain`, `renew-domain`, `update-domain`. Buying and renewing charge the wallet only on a second, confirming call. |
+| **DNS** | `list-dns-zones`, `add-dns-zone`, `check-dns-zone`, `delete-dns-zone`, `list-dns-records`, `add-dns-record`, `update-dns-record`, `delete-dns-record` |
 
 ## Build
 
