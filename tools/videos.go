@@ -306,7 +306,19 @@ func handleSetVideoDomain(
 		"domain_cname_target": lib.DomainCNAMETarget,
 		"playback_url":        lib.PlaybackURL,
 	}
-	if lib.PlaybackDomain != "" {
+	switch {
+	case lib.PlaybackDomain == "":
+	case lib.DNSZone != "" && lib.DNSError == "":
+		// The domain is in a zone the workspace hosts with us, so its record
+		// was written for it; telling the user to add one would be wrong.
+		out["dns_zone"] = lib.DNSZone
+		out["next_step"] = fmt.Sprintf(
+			"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
+			lib.PlaybackDomain, lib.DNSZone)
+	default:
+		if lib.DNSError != "" {
+			out["dns_error"] = lib.DNSError
+		}
 		out["next_step"] = fmt.Sprintf(
 			"point a CNAME for %s at %s; playback continues on the platform hostname until DNS propagates, "+
 				"which is on the same zero-rated address, so nothing is metered in the meantime",

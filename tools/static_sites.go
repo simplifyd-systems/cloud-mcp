@@ -39,7 +39,7 @@ type deployStaticSiteArgs struct {
 	Prune       *bool  `json:"prune,omitempty" jsonschema:"Remove files not in this request or archive, making the publish a full replace. Default true. Set false to patch individual files."`
 	// Domain is applied before the deploy so a single call can take a new site
 	// all the way to serving on the caller's own hostname.
-	Domain        string `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on. Requires a CNAME pointing at the returned domain_cname_target."`
+	Domain        string `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on. Requires a CNAME pointing at the returned domain_cname_target, unless the domain is in a zone the workspace hosts here, when it is added automatically."`
 	IndexDocument string `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
 	ErrorDocument string `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
 	SPAFallback   *bool  `json:"spa_fallback,omitempty"   jsonschema:"Set true for a single-page app (React, Vue, Svelte, …) so links to any of its pages load with status 200 rather than 404. Missing files under assets/ and static/ still 404. Omit to keep an existing site's setting."`
@@ -132,9 +132,22 @@ func handleDeployStaticSite(
 		}
 		out["custom_domain"] = updated.CustomDomain
 		out["domain_cname_target"] = updated.DomainCNAMETarget
-		out["next_step"] = fmt.Sprintf(
-			"point a CNAME for %s at %s; the site serves on %s until DNS propagates",
-			updated.CustomDomain, updated.DomainCNAMETarget, updated.DefaultURL)
+		if updated.DNSZone != "" && updated.DNSError == "" {
+			// The domain is in a zone the workspace hosts with us, so its
+			// record was written for it; telling the user to add one would be
+			// wrong.
+			out["dns_zone"] = updated.DNSZone
+			out["next_step"] = fmt.Sprintf(
+				"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
+				updated.CustomDomain, updated.DNSZone)
+		} else {
+			if updated.DNSError != "" {
+				out["dns_error"] = updated.DNSError
+			}
+			out["next_step"] = fmt.Sprintf(
+				"point a CNAME for %s at %s; the site serves on %s until DNS propagates",
+				updated.CustomDomain, updated.DomainCNAMETarget, updated.DefaultURL)
+		}
 	}
 
 	return jsonText(out), nil, nil
