@@ -6,8 +6,11 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	cloud "github.com/simplifyd-systems/cloud-go-sdk"
 )
 
 func testZip(t *testing.T) []byte {
@@ -117,5 +120,38 @@ func TestStageStaticSiteArchivePath(t *testing.T) {
 		if _, _, msg := stageStaticSiteArchive(deployStaticSiteArgs{ArchivePath: p}); msg == "" {
 			t.Errorf("%s: accepted", name)
 		}
+	}
+}
+
+func TestRequestedDomainsMergesAndNormalizes(t *testing.T) {
+	got := requestedDomains(" Example.com. ", []string{"www.example.com", "example.com", ""})
+	if want := []string{"example.com", "www.example.com"}; !slices.Equal(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	if got := requestedDomains("", nil); len(got) != 0 {
+		t.Fatalf("no domains: got %v", got)
+	}
+}
+
+// Each domain says what is left to do for its DNS: nothing for one in a zone
+// the workspace hosts here, a CNAME for any other.
+func TestDomainSummariesNextStep(t *testing.T) {
+	site := &cloud.StaticSite{
+		DefaultURL:        "https://web.sites.simplifyd.app",
+		DomainCNAMETarget: "site.simplifyd.app",
+		CustomDomains: []cloud.StaticSiteDomain{
+			{Domain: "example.com", Status: "active", DNSZone: "example.com"},
+			{Domain: "www.other.com", Status: "active"},
+		},
+	}
+	got := domainSummaries(site, []string{"example.com", "www.other.com", "missing.com"})
+	if len(got) != 2 {
+		t.Fatalf("expected the two domains the site has, got %v", got)
+	}
+	if got[0]["dns_zone"] != "example.com" || !strings.HasPrefix(got[0]["next_step"].(string), "nothing to do") {
+		t.Errorf("managed zone: %v", got[0])
+	}
+	if !strings.Contains(got[1]["next_step"].(string), "CNAME for www.other.com at site.simplifyd.app") {
+		t.Errorf("own DNS: %v", got[1])
 	}
 }

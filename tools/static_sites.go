@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -37,12 +38,13 @@ type deployStaticSiteArgs struct {
 	ArchivePath string `json:"archive_path,omitempty" jsonschema:"Absolute path to a .zip of the site on the machine running this MCP server. Uploaded straight to storage, so the bytes never pass through the conversation and the site's size is not bounded by it."`
 	ArchiveKey  string `json:"archive_key,omitempty"  jsonschema:"archive_key returned by create-static-site-upload, once the .zip has been PUT to its upload_url. Use the same name as that call."`
 	Prune       *bool  `json:"prune,omitempty" jsonschema:"Remove files not in this request or archive, making the publish a full replace. Default true. Set false to patch individual files."`
-	// Domain is applied before the deploy so a single call can take a new site
-	// all the way to serving on the caller's own hostname.
-	Domain        string `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on. Requires a CNAME pointing at the returned domain_cname_target, unless the domain is in a zone the workspace hosts here, when it is added automatically."`
-	IndexDocument string `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
-	ErrorDocument string `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
-	SPAFallback   *bool  `json:"spa_fallback,omitempty"   jsonschema:"Set true for a single-page app (React, Vue, Svelte, …) so links to any of its pages load with status 200 rather than 404. Missing files under assets/ and static/ still 404. Omit to keep an existing site's setting."`
+	// Domains are applied before the deploy so a single call can take a new
+	// site all the way to serving on the caller's own hostnames.
+	Domain        string   `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on, added alongside any it already has. Requires a CNAME pointing at the returned domain_cname_target, unless the domain is in a zone the workspace hosts here, when it is added automatically."`
+	Domains       []string `json:"domains,omitempty"        jsonschema:"Optional custom domains to serve the site on, e.g. both example.com and www.example.com. Added alongside any the site already has, with the same DNS requirements as domain."`
+	IndexDocument string   `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
+	ErrorDocument string   `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
+	SPAFallback   *bool    `json:"spa_fallback,omitempty"   jsonschema:"Set true for a single-page app (React, Vue, Svelte, …) so links to any of its pages load with status 200 rather than 404. Missing files under assets/ and static/ still 404. Omit to keep an existing site's setting."`
 }
 
 func handleDeployStaticSite(
@@ -122,35 +124,65 @@ func handleDeployStaticSite(
 
 	// A custom domain needs a deploy: the routing that terminates TLS for it is
 	// a cluster resource, unlike the platform URL which serves immediately.
-	if strings.TrimSpace(args.Domain) != "" {
-		updated, err := site.SetCustomDomain(ctx, args.Domain)
-		if err != nil {
-			return apiErr("set static site domain", err), nil, nil
+	if names := requestedDomains(args.Domain, args.Domains); len(names) > 0 {
+		var updated *cloud.StaticSite
+		for _, name := range names {
+			if updated, err = site.AddDomain(ctx, name); err != nil {
+				return apiErr("add static site domain "+name, err), nil, nil
+			}
 		}
 		if _, err := svcs.Deploy(ctx, siteSlug); err != nil {
 			return apiErr("deploy static site", err), nil, nil
 		}
-		out["custom_domain"] = updated.CustomDomain
+		out["custom_domains"] = domainSummaries(updated, names)
 		out["domain_cname_target"] = updated.DomainCNAMETarget
-		if updated.DNSZone != "" && updated.DNSError == "" {
-			// The domain is in a zone the workspace hosts with us, so its
-			// record was written for it; telling the user to add one would be
-			// wrong.
-			out["dns_zone"] = updated.DNSZone
-			out["next_step"] = fmt.Sprintf(
-				"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
-				updated.CustomDomain, updated.DNSZone)
-		} else {
-			if updated.DNSError != "" {
-				out["dns_error"] = updated.DNSError
-			}
-			out["next_step"] = fmt.Sprintf(
-				"point a CNAME for %s at %s; the site serves on %s until DNS propagates",
-				updated.CustomDomain, updated.DomainCNAMETarget, updated.DefaultURL)
-		}
 	}
 
 	return jsonText(out), nil, nil
+}
+
+// requestedDomains merges a call's single domain and its list, normalized the
+// way the API stores them, without repeats.
+func requestedDomains(domain string, domains []string) []string {
+	var out []string
+	for _, d := range append([]string{domain}, domains...) {
+		d = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(d)), ".")
+		if d != "" && !slices.Contains(out, d) {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+// domainSummaries describes each of names as the site now has it, with the
+// step the user has left to take for its DNS.
+func domainSummaries(site *cloud.StaticSite, names []string) []map[string]any {
+	out := make([]map[string]any, 0, len(names))
+	for _, name := range names {
+		d := site.Domain(name)
+		if d == nil {
+			continue
+		}
+		entry := map[string]any{"domain": d.Domain, "status": d.Status}
+		if d.DNSZone != "" && d.DNSError == "" {
+			// The domain is in a zone the workspace hosts with us, so its
+			// record was written for it; telling the user to add one would be
+			// wrong.
+			entry["dns_zone"] = d.DNSZone
+			entry["next_step"] = fmt.Sprintf(
+				"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
+				d.Domain, d.DNSZone)
+		} else {
+			if d.DNSError != "" {
+				entry["dns_error"] = d.DNSError
+			}
+			entry["next_step"] = fmt.Sprintf(
+				"point a CNAME for %s at %s; the site serves on %s until DNS propagates",
+				d.Domain, site.DomainCNAMETarget, site.DefaultURL)
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 // siteDocuments are the document settings a call may give. Empty strings and a
@@ -448,6 +480,75 @@ func handleGetStaticSiteFiles(
 	return jsonText(result), nil, nil
 }
 
+// ---- add-static-site-domain / remove-static-site-domain ----
+
+type staticSiteDomainArgs struct {
+	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
+	Project   string `json:"project"   jsonschema:"Project slug or name"`
+	Env       string `json:"env"       jsonschema:"Environment slug or name"`
+	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Domain    string `json:"domain"    jsonschema:"The custom domain, e.g. www.example.com"`
+}
+
+func handleAddStaticSiteDomain(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args staticSiteDomainArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	names := requestedDomains(args.Domain, nil)
+	if len(names) == 0 {
+		return text("domain is required"), nil, nil
+	}
+	svcs := services(api, args.Workspace, args.Project, args.Env)
+	site, err := svcs.StaticSite(args.Service).AddDomain(ctx, names[0])
+	if err != nil {
+		return apiErr("add static site domain", err), nil, nil
+	}
+	// Routing for the domain is a cluster resource, so it only takes effect on
+	// the next deploy.
+	if _, err := svcs.Deploy(ctx, args.Service); err != nil {
+		return apiErr("deploy static site", err), nil, nil
+	}
+	return jsonText(map[string]any{
+		"added":               domainSummaries(site, names),
+		"custom_domains":      site.CustomDomains,
+		"domain_cname_target": site.DomainCNAMETarget,
+		"default_url":         site.DefaultURL,
+	}), nil, nil
+}
+
+func handleRemoveStaticSiteDomain(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	args staticSiteDomainArgs,
+) (*mcp.CallToolResult, any, error) {
+	api, r, ok := sdkFor(req)
+	if !ok {
+		return r, nil, nil
+	}
+	names := requestedDomains(args.Domain, nil)
+	if len(names) == 0 {
+		return text("domain is required"), nil, nil
+	}
+	svcs := services(api, args.Workspace, args.Project, args.Env)
+	site, err := svcs.StaticSite(args.Service).RemoveDomain(ctx, names[0])
+	if err != nil {
+		return apiErr("remove static site domain", err), nil, nil
+	}
+	if _, err := svcs.Deploy(ctx, args.Service); err != nil {
+		return apiErr("deploy static site", err), nil, nil
+	}
+	return jsonText(map[string]any{
+		"removed":        names[0],
+		"custom_domains": site.CustomDomains,
+		"default_url":    site.DefaultURL,
+	}), nil, nil
+}
+
 // ---- set-static-site-domain ----
 
 type setStaticSiteDomainArgs struct {
@@ -455,25 +556,36 @@ type setStaticSiteDomainArgs struct {
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
 	Service   string `json:"service"   jsonschema:"Static site service slug"`
-	Domain    string `json:"domain"    jsonschema:"Custom domain to serve the site on. Pass an empty string to detach the current domain."`
+	Domain    string `json:"domain"    jsonschema:"Custom domain to add to the site. Pass an empty string to detach every custom domain."`
 }
 
+// handleSetStaticSiteDomain is the single-domain tool from before a site could
+// have several. A domain is added alongside the site's others, never in place
+// of them, so a caller that does not know about them cannot take them down.
 func handleSetStaticSiteDomain(
 	ctx context.Context,
 	req *mcp.CallToolRequest,
 	args setStaticSiteDomainArgs,
 ) (*mcp.CallToolResult, any, error) {
+	if len(requestedDomains(args.Domain, nil)) > 0 {
+		return handleAddStaticSiteDomain(ctx, req, staticSiteDomainArgs(args))
+	}
+
 	api, r, ok := sdkFor(req)
 	if !ok {
 		return r, nil, nil
 	}
 	svcs := services(api, args.Workspace, args.Project, args.Env)
-	site, err := svcs.StaticSite(args.Service).SetCustomDomain(ctx, args.Domain)
+	client := svcs.StaticSite(args.Service)
+	site, err := client.Get(ctx)
 	if err != nil {
-		return apiErr("set static site domain", err), nil, nil
+		return apiErr("get static site", err), nil, nil
 	}
-	// Routing for the domain is a cluster resource, so it only takes effect on
-	// the next deploy.
+	for _, d := range site.CustomDomains {
+		if site, err = client.RemoveDomain(ctx, d.Slug); err != nil {
+			return apiErr("remove static site domain "+d.Domain, err), nil, nil
+		}
+	}
 	if _, err := svcs.Deploy(ctx, args.Service); err != nil {
 		return apiErr("deploy static site", err), nil, nil
 	}
@@ -508,7 +620,7 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "get-static-site",
-		Description: "Get a static site's configuration, serving URLs, custom domain status and storage usage.",
+		Description: "Get a static site's configuration, serving URLs, custom domains with their status, and storage usage.",
 	}, handleGetStaticSite)
 
 	addTool(s, &mcp.Tool{
@@ -526,8 +638,23 @@ func RegisterStaticSiteTools(s *mcp.Server) {
 	}, handleGetStaticSiteFiles)
 
 	addTool(s, &mcp.Tool{
+		Name: "add-static-site-domain",
+		Description: "Serve a static site on one more custom domain, alongside any it already has — a site can " +
+			"have up to 20, e.g. both example.com and www.example.com. Deploys the site so routing takes effect. " +
+			"The result says, for the domain, whether its DNS record was added automatically (it is in a zone " +
+			"the workspace hosts here) or which CNAME target it must point at.",
+	}, handleAddStaticSiteDomain)
+
+	addTool(s, &mcp.Tool{
+		Name: "remove-static-site-domain",
+		Description: "Stop serving a static site on one of its custom domains. The site keeps serving on its " +
+			"other domains and its platform URL. Deploys the site so routing takes effect.",
+	}, handleRemoveStaticSiteDomain)
+
+	addTool(s, &mcp.Tool{
 		Name: "set-static-site-domain",
-		Description: "Attach a custom domain to a static site, or detach it by passing an empty domain. " +
+		Description: "Add a custom domain to a static site alongside any it already has, or detach every custom " +
+			"domain by passing an empty domain. Prefer add-static-site-domain and remove-static-site-domain. " +
 			"Deploys the site so routing takes effect, and returns the CNAME target the domain must point at.",
 	}, handleSetStaticSiteDomain)
 }
