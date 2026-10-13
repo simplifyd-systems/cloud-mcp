@@ -6,7 +6,7 @@ toolchain go1.23.5
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.3.1
-	github.com/simplifyd-systems/cloud-go-sdk v0.1.37
+	github.com/simplifyd-systems/cloud-go-sdk v0.1.38-0.20261013225420-d4d1e1c6bb2c
 )
 
 require (
