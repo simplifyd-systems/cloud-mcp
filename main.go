@@ -78,6 +78,7 @@ func main() {
 	tools.RegisterTokenTools(server)
 	tools.RegisterAlertTools(server)
 	tools.RegisterTemplateTools(server)
+	tools.RegisterComputerTools(server)
 
 	if local {
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
