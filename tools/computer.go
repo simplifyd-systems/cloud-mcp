@@ -259,7 +259,7 @@ func handleComputerAction(ctx context.Context, req *mcp.CallToolRequest, args co
 
 type computerBashArgs struct {
 	computerTarget
-	Command        string `json:"command" jsonschema:"Command to run with bash, as the ubuntu user in its home directory. DISPLAY is set, so GUI programs open on the screen; end those with & so the call returns, e.g. google-chrome https://example.com &"`
+	Command        string `json:"command" jsonschema:"Command to run with bash, as the ubuntu user in its home directory. DISPLAY is set, so GUI programs open on the screen; end those with & so the call returns, e.g. firefox https://example.com &"`
 	TimeoutSeconds int    `json:"timeout_seconds,omitempty" jsonschema:"Seconds before the command is killed, up to 600. Defaults to 60."`
 }
 
@@ -295,7 +295,7 @@ func handleComputerBash(ctx context.Context, req *mcp.CallToolRequest, args comp
 func RegisterComputerTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "create-computer",
-		Description: "Create and start a desktop machine an AI agent can use as its computer: Ubuntu 24.04 with an Xfce desktop, Chrome and LibreOffice, on the project's private network. " +
+		Description: "Create and start a desktop machine an AI agent can use as its computer: Ubuntu 24.04 with an Xfce desktop, Firefox and LibreOffice, on the project's private network. " +
 			"Drive it with computer-screenshot, computer-action and computer-bash. Billed as a VM (2 vCPUs, 4 GB memory by default) while it runs.",
 	}, handleCreateComputer)
 	addTool(s, &mcp.Tool{
