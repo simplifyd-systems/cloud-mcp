@@ -1,6 +1,10 @@
 package tools
 
 import (
+	"context"
+	"encoding/json"
+	"math"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -217,5 +221,117 @@ func TestParseMetricsRange(t *testing.T) {
 	}
 	if _, err := parseMetricsRange("30d"); err == nil {
 		t.Error("30d accepted, but the platform keeps only two days")
+	}
+}
+
+// 1 vCPU is the least a service can have, so a quiet 1-vCPU service is told
+// only about the memory it could give back, and nothing at all when memory is
+// in use too.
+func TestOverProvisioningNamesOnlyWhatCanComeDown(t *testing.T) {
+	quiet := func(memMiB, usedMiB int) *metricsSummary {
+		return summariseMetrics("api", &cloud.ServiceMetrics{
+			Range: cloud.MetricsRange1d, VCPUs: 1, MemoryMiB: memMiB,
+			Points: series(1440, func(int) cloud.MetricPoint {
+				return cloud.MetricPoint{CPUMillicores: 10, MemoryMiB: usedMiB, PodCount: 1}
+			}),
+		}, false)
+	}
+
+	s := quiet(1024, 200)
+	if !hasSignal(s, "memory (peak 19.5% of 1024 MiB) could come down") || hasSignal(s, "vcpus") {
+		t.Errorf("signals = %q", s.Signals)
+	}
+
+	s = quiet(256, 120)
+	if hasSignal(s, "Over-provisioned") || !hasSignal(s, "No resource pressure") {
+		t.Errorf("a 1-vCPU service using its memory has nothing to give back: %q", s.Signals)
+	}
+}
+
+func TestOverProvisioningNamesBothWhenBothCanComeDown(t *testing.T) {
+	s := summariseMetrics("api", &cloud.ServiceMetrics{
+		Range: cloud.MetricsRange1d, VCPUs: 2, MemoryMiB: 4096,
+		Points: series(1440, func(int) cloud.MetricPoint {
+			return cloud.MetricPoint{CPUMillicores: 50, MemoryMiB: 300, PodCount: 1}
+		}),
+	}, false)
+	if !hasSignal(s, "vcpus (peak 2.5% of 2) and memory (peak 7.3% of 4096 MiB) could come down") {
+		t.Errorf("signals = %q", s.Signals)
+	}
+}
+
+// A flat volume with a little jitter fits a tiny negative slope, which must
+// read as no growth rather than "-0".
+func TestRound1HasNoNegativeZero(t *testing.T) {
+	if got := *round1(-0.01); math.Signbit(got) {
+		t.Errorf("round1(-0.01) = %v, want 0", got)
+	}
+	b, _ := json.Marshal(round1(-0.01))
+	if string(b) != "0" {
+		t.Errorf("marshalled as %s, want 0", b)
+	}
+}
+
+func TestEnvironmentMetricsNamesServicesAndOrdersByPressure(t *testing.T) {
+	base := "/v1/workspaces/ws/projects/shop/envs/production/svcs"
+	withFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case base:
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"slug": "01a0-quiet", "name": "web"},
+				{"slug": "01a0-busy", "name": "worker"},
+				{"slug": "01a0-site", "name": "docs"},
+			})
+		case base + "/01a0-quiet/metrics", base + "/01a0-busy/metrics":
+			cpu := 100
+			if strings.Contains(r.URL.Path, "busy") {
+				cpu = 950
+			}
+			_ = json.NewEncoder(w).Encode(cloud.ServiceMetrics{
+				Range: cloud.MetricsRange1h, VCPUs: 1, MemoryMiB: 1024,
+				Points: series(60, func(int) cloud.MetricPoint {
+					return cloud.MetricPoint{CPUMillicores: cpu, MemoryMiB: 200, PodCount: 1}
+				}),
+			})
+		case base + "/01a0-site/metrics":
+			_, _ = w.Write([]byte(`{"range":"1h","points":[]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	result, _, _ := handleGetEnvironmentMetrics(context.Background(), nil, envMetricsArgs{
+		Workspace: "ws", Project: "shop", Env: "production", Range: "1h",
+	})
+	if result.IsError {
+		t.Fatalf("error: %s", resultText(t, result))
+	}
+	var out struct {
+		Services []struct {
+			Service string `json:"service"`
+			Name    string `json:"name"`
+		} `json:"services"`
+		NotMeasured []string `json:"not_measured"`
+	}
+	if err := json.Unmarshal([]byte(resultText(t, result)), &out); err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Services) != 2 || out.Services[0].Name != "worker" || out.Services[1].Name != "web" {
+		t.Errorf("services = %+v, want worker then web", out.Services)
+	}
+	if len(out.NotMeasured) != 1 || out.NotMeasured[0] != "01a0-site" {
+		t.Errorf("not_measured = %v", out.NotMeasured)
+	}
+}
+
+func TestEnvironmentMetricsSaysWhenThereAreNoServices(t *testing.T) {
+	withFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[]`))
+	})
+	result, _, _ := handleGetEnvironmentMetrics(context.Background(), nil, envMetricsArgs{
+		Workspace: "ws", Project: "shop", Env: "dev",
+	})
+	if out := resultText(t, result); result.IsError || !strings.Contains(out, "has no services") {
+		t.Errorf("result = %s", out)
 	}
 }
