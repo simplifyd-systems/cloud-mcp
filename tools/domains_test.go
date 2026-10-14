@@ -79,6 +79,35 @@ func TestRegisterDomainChargesOnlyAtTheConfirmedPrice(t *testing.T) {
 	if _, sent := (*registered)[0]["registrant"]; sent {
 		t.Errorf("sent a registrant: %v", (*registered)[0])
 	}
+	// The confirmed total goes to the API, which checks it as it charges.
+	if got := (*registered)[0]["confirm_total"]; got != float64(170_000_000) {
+		t.Errorf("confirm_total sent = %v", got)
+	}
+}
+
+// The price can still move between the tool's quote and the charge. The API
+// refuses that, charging nothing, and the person is asked again.
+func TestRegisterDomainPriceMovesAtTheLastMoment(t *testing.T) {
+	withFakeAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == domainsBase+"/registrant":
+			_ = json.NewEncoder(w).Encode(map[string]any{"registrant": owner})
+		case r.Method == http.MethodGet && r.URL.Path == domainsBase+"/quote":
+			_ = json.NewEncoder(w).Encode(map[string]any{"quote": cloud.DomainQuote{Name: "acme.com", Available: true, Years: 1, Total: 161_250_000}})
+		case r.Method == http.MethodPost && r.URL.Path == domainsBase:
+			w.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(w).Encode(map[string]any{"code": "ERR_PRICE_CHANGED", "message": "the price is ₦17,000", "total": 170_000_000})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+	result, _, _ := handleRegisterDomain(context.Background(), nil, registerDomainArgs{Workspace: "ws", Name: "acme.com", ConfirmTotal: 161_250_000})
+	out := resultText(t, result)
+	for _, want := range []string{"changed to ₦17,000.00", "Nothing was charged", "confirm_total=170000000"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("does not mention %q:\n%s", want, out)
+		}
+	}
 }
 
 // Without a saved registrant there is nothing to buy as: the person is sent

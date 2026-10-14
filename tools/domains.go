@@ -249,7 +249,14 @@ func handleRegisterDomain(ctx context.Context, req *mcp.CallToolRequest, args re
 		return text(b.String()), nil, nil
 	}
 
-	d, err := domains.Register(ctx, cloud.RegisterDomainInput{Name: q.Name, Years: q.Years, AutoRenew: args.AutoRenew})
+	// The total confirmed goes to the API too, which charges only if it is still
+	// the price when the wallet is debited: the quote above is a moment older.
+	d, err := domains.Register(ctx, cloud.RegisterDomainInput{Name: q.Name, Years: q.Years, AutoRenew: args.AutoRenew, ConfirmTotal: &args.ConfirmTotal})
+	if pce, ok := cloud.AsPriceConfirmation(err); ok {
+		return text(fmt.Sprintf("The price of %s changed to %s, VAT included, just as it was being bought. Nothing was charged. "+
+			"Show the person the new price. If they agree, call register-domain again with the same arguments and confirm_total=%d.",
+			q.Name, cloud.FormatNaira(pce.Total), pce.Total)), nil, nil
+	}
 	if err != nil {
 		return customerErr("register domain", err), nil, nil
 	}
