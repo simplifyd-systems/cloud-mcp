@@ -77,6 +77,7 @@ func main() {
 	tools.RegisterDeploymentTools(server)
 	tools.RegisterTokenTools(server)
 	tools.RegisterAlertTools(server)
+	tools.RegisterMetricsTools(server)
 	tools.RegisterTemplateTools(server)
 
 	if local {
