@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,6 +35,7 @@ const (
 	diskFullSoonDays  = 14.0
 	idleCPUPeakPct    = 25.0
 	idleMemPeakPct    = 40.0
+	minVCPUs          = 1
 	maxSeriesBuckets  = 48
 	envMetricsWorkers = 4
 )
@@ -108,7 +110,11 @@ type metricsBucket struct {
 }
 
 type metricsSummary struct {
-	Service     string           `json:"service"`
+	Service string `json:"service"`
+	// Name is filled in by the environment sweep, which has it from listing
+	// the services. Slugs can be opaque IDs, and a list of those is no use
+	// to an agent or to the person it reports to.
+	Name        string           `json:"name,omitempty"`
 	Range       string           `json:"range"`
 	Samples     int              `json:"samples"`
 	From        *time.Time       `json:"from,omitempty"`
@@ -133,7 +139,9 @@ func pct(used, allocated float64) (float64, bool) {
 }
 
 func round1(f float64) *float64 {
-	r := math.Round(f*10) / 10
+	// Adding zero turns a negative zero, from rounding a tiny negative slope,
+	// into a plain zero: "-0 MiB/day" reads as a shrinking volume.
+	r := math.Round(f*10)/10 + 0
 	return &r
 }
 
@@ -328,12 +336,23 @@ func metricsSignals(s *metricsSummary, m *cloud.ServiceMetrics) ([]string, float
 	// Over-provisioning is only worth naming with a full day of history behind
 	// it: an hour of a quiet service says nothing about its busy hour.
 	span := s.To.Sub(*s.From)
-	if len(out) == 0 && span >= 20*time.Hour &&
-		s.CPU.PeakPct != nil && *s.CPU.PeakPct < idleCPUPeakPct &&
-		s.Memory.PeakPct != nil && *s.Memory.PeakPct < idleMemPeakPct {
-		out = append(out, fmt.Sprintf(
-			"Over-provisioned: CPU never exceeded %.1f%% and memory %.1f%% of allocation over the last %s. It could run on less.",
-			*s.CPU.PeakPct, *s.Memory.PeakPct, rng))
+	//
+	// Each resource is judged on its own, and only named when it can actually
+	// come down: 1 vCPU is the least a service can have, so an idle 1-vCPU
+	// service has nothing to give back on CPU however quiet it is.
+	if len(out) == 0 && span >= 20*time.Hour {
+		var less []string
+		if c := s.CPU; c.PeakPct != nil && *c.PeakPct < idleCPUPeakPct && s.PerInstance.VCPUs > minVCPUs {
+			less = append(less, fmt.Sprintf("vcpus (peak %.1f%% of %d)", *c.PeakPct, s.PerInstance.VCPUs))
+		}
+		if mem := s.Memory; mem.PeakPct != nil && *mem.PeakPct < idleMemPeakPct {
+			less = append(less, fmt.Sprintf("memory (peak %.1f%% of %d MiB)", *mem.PeakPct, s.PerInstance.MemoryMiB))
+		}
+		if len(less) > 0 {
+			out = append(out, fmt.Sprintf(
+				"Over-provisioned over the last %s: %s could come down.",
+				rng, strings.Join(less, " and ")))
+		}
 	}
 
 	if s.Instances.Min != s.Instances.Max {
@@ -483,6 +502,9 @@ func handleGetEnvironmentMetrics(
 	if err != nil {
 		return apiErr("list services", err), nil, nil
 	}
+	if len(svcs) == 0 {
+		return text(fmt.Sprintf("Environment %q has no services.", args.Env)), nil, nil
+	}
 
 	type result struct {
 		slug    string
@@ -494,7 +516,7 @@ func handleGetEnvironmentMetrics(
 	var wg sync.WaitGroup
 	for i, svc := range svcs {
 		wg.Add(1)
-		go func(i int, slug string) {
+		go func(i int, slug, name string) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
@@ -503,8 +525,10 @@ func handleGetEnvironmentMetrics(
 				results[i] = result{slug: slug, err: err}
 				return
 			}
-			results[i] = result{slug: slug, summary: summariseMetrics(slug, m, false)}
-		}(i, svc.Slug)
+			summary := summariseMetrics(slug, m, false)
+			summary.Name = name
+			results[i] = result{slug: slug, summary: summary}
+		}(i, svc.Slug, svc.Name)
 	}
 	wg.Wait()
 
