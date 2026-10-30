@@ -47,6 +47,12 @@ func handleUploadVideo(
 	if !ok {
 		return r, nil, nil
 	}
+	// path is read on the machine running this server; over HTTP that is our
+	// container, never the caller's file. The tool is not registered there, and
+	// this refuses it all the same.
+	if isRemote(req) {
+		return toolError("upload-video is only available when this server runs on your own machine"), nil, nil
+	}
 	if strings.TrimSpace(args.Library) == "" {
 		return text("library is required"), nil, nil
 	}
@@ -149,7 +155,7 @@ type listVideosArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Video library service slug"`
+	Service   string `json:"service"   jsonschema:"Video library service slug or name"`
 	Limit     int    `json:"limit,omitempty" jsonschema:"Maximum videos to return, default 50"`
 }
 
@@ -176,7 +182,7 @@ type getVideoArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Video library service slug"`
+	Service   string `json:"service"   jsonschema:"Video library service slug or name"`
 	Video     string `json:"video"     jsonschema:"Video id"`
 }
 
@@ -203,7 +209,7 @@ type videoStatsArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Video library service slug"`
+	Service   string `json:"service"   jsonschema:"Video library service slug or name"`
 	Video     string `json:"video,omitempty" jsonschema:"Video id. Omit for figures across the whole library, which also returns the most watched videos."`
 	From      string `json:"from,omitempty"  jsonschema:"Start date, YYYY-MM-DD. Defaults to four weeks ago."`
 	To        string `json:"to,omitempty"    jsonschema:"End date, YYYY-MM-DD. Defaults to today."`
@@ -241,7 +247,7 @@ type addVideoCaptionsArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Video library service slug"`
+	Service   string `json:"service"   jsonschema:"Video library service slug or name"`
 	Video     string `json:"video"     jsonschema:"Video id"`
 	Language  string `json:"language"  jsonschema:"Language code, e.g. en or ha"`
 	Label     string `json:"label,omitempty" jsonschema:"Label shown in the player's caption menu. Defaults to the language code."`
@@ -275,7 +281,7 @@ type setVideoDomainArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Video library service slug"`
+	Service   string `json:"service"   jsonschema:"Video library service slug or name"`
 	Domain    string `json:"domain"    jsonschema:"Playback hostname, e.g. video.example.com. Pass an empty string to detach the current one."`
 }
 
@@ -353,8 +359,17 @@ func interruptedUploadResult(librarySlug string, err error) *mcp.CallToolResult 
 	})
 }
 
-// RegisterVideoTools adds the video library tools to the server.
-func RegisterVideoTools(s *mcp.Server) {
+// RegisterVideoTools adds the video library tools to the server. upload-video
+// reads a file on the machine running the server, so it is registered only
+// when local is true (stdio); on the hosted server that machine is ours.
+func RegisterVideoTools(s *mcp.Server, local bool) {
+	if local {
+		registerUploadVideo(s)
+	}
+	registerVideoLibraryTools(s)
+}
+
+func registerUploadVideo(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "upload-video",
 		Description: "Upload a video to Simplifyd and get an embeddable player back. Creates the video library " +
@@ -367,7 +382,9 @@ func RegisterVideoTools(s *mcp.Server) {
 			"Playback is served from the platform's zero-rated address, which means watching costs the viewer " +
 			"no data on supported Nigerian networks — the reason to host video here rather than on YouTube.",
 	}, handleUploadVideo)
+}
 
+func registerVideoLibraryTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "list-videos",
 		Description: "List the videos in a video library, with their encoding status, length and stored size. " +

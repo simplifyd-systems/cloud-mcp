@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -70,9 +71,22 @@ func handleCreateEnvironment(
 	if !ok {
 		return r, nil, nil
 	}
-	env, err := api.Workspace(args.Workspace).Project(args.Project).CreateEnv(ctx, args.Name)
+	project := api.Workspace(args.Workspace).Project(args.Project)
+	env, err := project.CreateEnv(ctx, args.Name)
 	if err != nil {
 		return apiErr("create environment", err), nil, nil
+	}
+	// The API answers a create with the new slug under a key the SDK does not
+	// read, so env arrives empty. Looking it up by name gives the caller the
+	// slug it needs for every call into the environment.
+	if env.Slug == "" {
+		if envs, err := project.ListEnvs(ctx); err == nil {
+			for _, candidate := range envs {
+				if candidate.Name == args.Name {
+					return jsonText(candidate), nil, nil
+				}
+			}
+		}
 	}
 	return jsonText(env), nil, nil
 }
@@ -152,6 +166,13 @@ func handleCreateEnvVariable(
 	if err != nil {
 		return apiErr("create environment variable", err), nil, nil
 	}
+	// As with environments, the create response does not carry the variable;
+	// the slug is what update-env-variable and delete-env-variable need.
+	if v.Slug == "" {
+		if slug, ok := findVariableSlug(ctx, vars.List, args.Name); ok {
+			return text(fmt.Sprintf("Created %s (slug %s).", args.Name, slug)), nil, nil
+		}
+	}
 	return jsonText(v), nil, nil
 }
 
@@ -216,7 +237,7 @@ func RegisterEnvironmentTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "get-environment",
-		Description: "Get details of a specific environment including its services and variables.",
+		Description: "Get an environment's name and slug. Use list-services and list-env-variables for what it contains.",
 	}, handleGetEnvironment)
 
 	addTool(s, &mcp.Tool{

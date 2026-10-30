@@ -19,7 +19,7 @@ type postgresExtensionsArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug"`
+	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug or name"`
 	Database  string `json:"database,omitempty" jsonschema:"Database name; defaults to the built-in \"app\" database"`
 }
 
@@ -27,7 +27,7 @@ type postgresExtensionArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug"`
+	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug or name"`
 	Database  string `json:"database,omitempty" jsonschema:"Database name; defaults to the built-in \"app\" database"`
 	Extension string `json:"extension" jsonschema:"Extension name, e.g. pg_trgm. Must be on the platform allowlist returned by list-postgres-extensions"`
 }

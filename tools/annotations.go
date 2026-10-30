@@ -213,8 +213,8 @@ func toolTitle(name string) string {
 }
 
 // RegisterAll registers every tool group on s. local selects the stdio
-// transport, where login and the domain purchase tools are also available; see
-// RegisterAuthTools and RegisterDomainTools.
+// transport, where login, the domain purchase tools and upload-video are also
+// available; see RegisterAuthTools, RegisterDomainTools and RegisterVideoTools.
 func RegisterAll(s *mcp.Server, local bool) {
 	RegisterAuthTools(s, local)
 	RegisterWorkspaceTools(s)
@@ -224,8 +224,8 @@ func RegisterAll(s *mcp.Server, local bool) {
 	RegisterPostgresExtensionTools(s)
 	RegisterRegistryRetentionTools(s)
 	RegisterRegistryCredentialTools(s)
-	RegisterStaticSiteTools(s)
-	RegisterVideoTools(s)
+	RegisterStaticSiteTools(s, local)
+	RegisterVideoTools(s, local)
 	RegisterEmailTools(s)
 	RegisterDomainTools(s, local)
 	RegisterDNSTools(s)

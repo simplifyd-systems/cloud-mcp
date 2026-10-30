@@ -278,6 +278,10 @@ func handleGetRegistry(
 	if err != nil {
 		return apiErr("get registry", err), nil, nil
 	}
+	// A workspace without a registry gets an all-empty record, not a 404.
+	if reg.RegistryURL == "" {
+		return text("This workspace has no container registry yet. See Settings → Registry in the Simplifyd console."), nil, nil
+	}
 	return jsonText(reg), nil, nil
 }
 

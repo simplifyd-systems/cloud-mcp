@@ -35,7 +35,7 @@ type deployStaticSiteArgs struct {
 	// The archive forms exist so a whole build output goes up in one piece
 	// rather than as one inline entry per file; the server expands it.
 	Archive     string `json:"archive,omitempty"      jsonschema:"The whole site as a base64-encoded .zip. A single wrapping directory (e.g. dist/) is removed so the site serves at its root. Prefer archive_path when the zip is on the machine running this server."`
-	ArchivePath string `json:"archive_path,omitempty" jsonschema:"Absolute path to a .zip of the site on the machine running this MCP server. Uploaded straight to storage, so the bytes never pass through the conversation and the site's size is not bounded by it."`
+	ArchivePath string `json:"archive_path,omitempty" jsonschema:"Only when this MCP server runs on your own machine: absolute path to a .zip of the site there. Uploaded straight to storage, so the bytes never pass through the conversation. Refused by the hosted server; use archive_key."`
 	ArchiveKey  string `json:"archive_key,omitempty"  jsonschema:"archive_key returned by create-static-site-upload, once the .zip has been PUT to its upload_url. Use the same name as that call."`
 	Prune       *bool  `json:"prune,omitempty" jsonschema:"Remove files not in this request or archive, making the publish a full replace. Default true. Set false to patch individual files."`
 	// Domains are applied before the deploy so a single call can take a new
@@ -55,6 +55,13 @@ func handleDeployStaticSite(
 	api, r, ok := sdkFor(req)
 	if !ok {
 		return r, nil, nil
+	}
+	// archive_path names a file on the machine running this server. Over HTTP
+	// that is the hosted server, not the caller's computer: honouring it would
+	// let any caller probe and read files from our own container.
+	if isRemote(req) && strings.TrimSpace(args.ArchivePath) != "" {
+		return toolError("archive_path is only available when this server runs on your own machine. " +
+			"Upload the zip with create-static-site-upload and pass its archive_key instead."), nil, nil
 	}
 	if strings.TrimSpace(args.Name) == "" {
 		return text("name is required"), nil, nil
@@ -404,7 +411,7 @@ type getStaticSiteArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Service   string `json:"service"   jsonschema:"Static site service slug or name"`
 }
 
 func handleGetStaticSite(
@@ -429,7 +436,7 @@ type listStaticSiteFilesArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Service   string `json:"service"   jsonschema:"Static site service slug or name"`
 	Prefix    string `json:"prefix,omitempty" jsonschema:"Optional path prefix to list, e.g. assets/. Lists the whole site when omitted."`
 }
 
@@ -456,7 +463,7 @@ type getStaticSiteFilesArgs struct {
 	Workspace string   `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string   `json:"project"   jsonschema:"Project slug or name"`
 	Env       string   `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string   `json:"service"   jsonschema:"Static site service slug"`
+	Service   string   `json:"service"   jsonschema:"Static site service slug or name"`
 	Paths     []string `json:"paths"     jsonschema:"Paths of the files to download, e.g. [\"index.html\", \"assets/app.js\"]. Use list-static-site-files to discover them."`
 }
 
@@ -477,7 +484,9 @@ func handleGetStaticSiteFiles(
 	if err != nil {
 		return apiErr("get static site files", err), nil, nil
 	}
-	return jsonText(result), nil, nil
+	// Raw: the redaction meant for secrets drops any "content" field, which
+	// here is the file the caller asked for.
+	return jsonTextRaw(result), nil, nil
 }
 
 // ---- add-static-site-domain / remove-static-site-domain ----
@@ -486,7 +495,7 @@ type staticSiteDomainArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Service   string `json:"service"   jsonschema:"Static site service slug or name"`
 	Domain    string `json:"domain"    jsonschema:"The custom domain, e.g. www.example.com"`
 }
 
@@ -555,7 +564,7 @@ type setStaticSiteDomainArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Static site service slug"`
+	Service   string `json:"service"   jsonschema:"Static site service slug or name"`
 	Domain    string `json:"domain"    jsonschema:"Custom domain to add to the site. Pass an empty string to detach every custom domain."`
 }
 
@@ -593,13 +602,19 @@ func handleSetStaticSiteDomain(
 }
 
 // RegisterStaticSiteTools adds the static site tools to the server.
-func RegisterStaticSiteTools(s *mcp.Server) {
+// RegisterStaticSiteTools registers the static site tools on s. local is true
+// for stdio, where the server runs on the caller's machine and archive_path can
+// name a file there; the hosted server refuses it.
+func RegisterStaticSiteTools(s *mcp.Server, local bool) {
+	archiveSources := "archive_key for a zip uploaded via create-static-site-upload, or archive for a base64-encoded zip. "
+	if local {
+		archiveSources = "archive_path for a zip on the machine running this server, " + archiveSources
+	}
 	addTool(s, &mcp.Tool{
 		Name: "deploy-static-site",
 		Description: "Deploy an HTML/CSS/JS site to Simplifyd in one call. Creates the site if one with this name " +
 			"does not exist, then publishes it. The site can be given as inline files, or as a single .zip — " +
-			"archive_path for a zip on the machine running this server, archive_key for a zip uploaded via " +
-			"create-static-site-upload, or archive for a base64-encoded zip. If the zip is on your machine and " +
+			archiveSources + "If the zip is on your machine and " +
 			"you can run shell commands, use create-static-site-upload rather than archive so the bytes never " +
 			"pass through the conversation. " +
 			"Prefer a zip over listing files one by one for anything beyond a few files, such as a build " +
