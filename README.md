@@ -25,6 +25,18 @@ over either **stdio** (a local client launches the binary as a subprocess) or
 | **Domains** | `search-domains`, `quote-domain`, `list-domains`, `get-domain`, `register-domain`, `renew-domain`, `update-domain`. Buying and renewing charge the wallet only on a second, confirming call. |
 | **DNS** | `list-dns-zones`, `add-dns-zone`, `check-dns-zone`, `delete-dns-zone`, `list-dns-records`, `add-dns-record`, `update-dns-record`, `delete-dns-record` |
 
+Every tool carries a title and explicit `readOnlyHint`, `destructiveHint` and
+`openWorldHint` annotations, which clients use to decide when to ask before
+calling it. The classification lives in `tools/annotations.go`, and a test
+fails if a tool is added without one.
+
+## Directory listings
+
+`server.json` describes the hosted server for the
+[MCP Registry](https://registry.modelcontextprotocol.io), which registry-aware
+clients such as Lovable browse. Bump its `version` with each release and publish
+with `mcp-publisher publish`.
+
 ## Build
 
 ```bash
@@ -39,6 +51,7 @@ go build -o cloud-mcp .
 | `MCP_ADDR` | `:8080` | Listen address (http only) |
 | `MCP_ALLOWED_ORIGINS` | *(none)* | Comma-separated browser origin allowlist (http only) |
 | `SIMPLIFYD_API_URL` | `https://api.cloud.simplifyd.com` | API base URL |
+| `OPENAI_APPS_CHALLENGE` | *(none)* | Domain verification token from OpenAI's plugin portal, served at `/.well-known/openai-apps-challenge` (http only) |
 
 Under HTTP the MCP endpoint answers on the bare origin and on `/mcp`, with
 a plain `/healthz` for probes.

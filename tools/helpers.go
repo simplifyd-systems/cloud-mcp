@@ -207,6 +207,27 @@ func redactSensitiveFields(v any) {
 	}
 }
 
+// authChallenge is the WWW-Authenticate value attached to a tool result when
+// the API rejects the caller's token. Empty over stdio, where there is no
+// OAuth flow to restart.
+var authChallenge string
+
+// SetAuthChallenge sets the challenge apiErr attaches to authentication
+// failures. The HTTP transport calls it at startup.
+func SetAuthChallenge(challenge string) {
+	authChallenge = challenge
+}
+
+// reauthenticate marks a tool result as an authentication failure the client
+// can fix by signing in again. ChatGPT shows its reconnect prompt only for a
+// result carrying this _meta key; other clients ignore it.
+func reauthenticate(result *mcp.CallToolResult) *mcp.CallToolResult {
+	if authChallenge != "" {
+		result.Meta = mcp.Meta{"mcp/www_authenticate": []string{authChallenge}}
+	}
+	return result
+}
+
 // apiErr formats an API error for display.
 func apiErr(op string, err error) *mcp.CallToolResult {
 	requestID := newRequestID()
@@ -217,7 +238,7 @@ func apiErr(op string, err error) *mcp.CallToolResult {
 		case http.StatusBadRequest, http.StatusUnprocessableEntity:
 			return errResult("%s: request rejected (reference %s)", op, requestID)
 		case http.StatusUnauthorized:
-			return errResult("%s: authentication required (reference %s)", op, requestID)
+			return reauthenticate(errResult("%s: authentication required (reference %s)", op, requestID))
 		case http.StatusForbidden:
 			return errResult("%s: permission denied (reference %s)", op, requestID)
 		case http.StatusNotFound:

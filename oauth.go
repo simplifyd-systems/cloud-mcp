@@ -52,6 +52,7 @@ func registerOAuthMetadata(mux *http.ServeMux) {
 	// Clients that were given the full endpoint URL rather than the origin look
 	// for the document under that path instead.
 	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", protectedResource)
+	mux.HandleFunc("/.well-known/openai-apps-challenge", openAIAppsChallenge)
 }
 
 func protectedResource(w http.ResponseWriter, _ *http.Request) {
@@ -123,6 +124,18 @@ func isBrowserNavigation(r *http.Request) bool {
 
 // challenge writes a 401 pointing the client at our metadata document.
 func challenge(w http.ResponseWriter, errCode, description string) {
+	w.Header().Set("WWW-Authenticate", challengeValue(errCode, description))
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnauthorized)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error":             "unauthorized",
+		"error_description": description,
+	})
+	log.Printf("unauthenticated request rejected: %s", description)
+}
+
+// challengeValue is the WWW-Authenticate value naming our metadata document.
+func challengeValue(errCode, description string) string {
 	params := fmt.Sprintf(
 		`Bearer resource_metadata="%s/.well-known/oauth-protected-resource"`,
 		resourceURL(),
@@ -133,14 +146,21 @@ func challenge(w http.ResponseWriter, errCode, description string) {
 	if description != "" {
 		params += fmt.Sprintf(`, error_description="%s"`, description)
 	}
-	w.Header().Set("WWW-Authenticate", params)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusUnauthorized)
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"error":             "unauthorized",
-		"error_description": description,
-	})
-	log.Printf("unauthenticated request rejected: %s", description)
+	return params
+}
+
+// openAIAppsChallenge serves the token OpenAI's plugin portal asks for to prove
+// we control this host. The portal shows the token; it reaches us through
+// OPENAI_APPS_CHALLENGE and is served exactly as given, as plain text, because
+// the portal rejects anything else.
+func openAIAppsChallenge(w http.ResponseWriter, _ *http.Request) {
+	token := strings.TrimSpace(os.Getenv("OPENAI_APPS_CHALLENGE"))
+	if token == "" {
+		http.NotFound(w, nil)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = fmt.Fprint(w, token)
 }
 
 // bearerFromHeader mirrors tools.bearerToken; duplicated rather than exported

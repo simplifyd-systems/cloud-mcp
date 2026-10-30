@@ -100,10 +100,12 @@ func handleGetMe(
 // the machine running the server — see handleLogin.
 func RegisterAuthTools(s *mcp.Server, local bool) {
 	if local {
-		mcp.AddTool(s, &mcp.Tool{
+		login := &mcp.Tool{
 			Name:        "login",
 			Description: "Log in to Simplifyd Cloud with your email and password. Saves the session token for subsequent calls.",
-		}, handleLogin)
+		}
+		annotate(login)
+		mcp.AddTool(s, login, handleLogin)
 	}
 
 	addTool(s, &mcp.Tool{

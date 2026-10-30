@@ -76,3 +76,21 @@ func TestAPIErrDoesNotExposeTransportError(t *testing.T) {
 		t.Fatalf("transport details leaked: %s", output)
 	}
 }
+
+// ChatGPT offers to reconnect only when a failed tool result carries the
+// challenge in _meta; without it an expired token is a dead end.
+func TestAPIErrAsksToReauthenticateOnUnauthorized(t *testing.T) {
+	SetAuthChallenge(`Bearer resource_metadata="https://mcp.example.com/.well-known/oauth-protected-resource"`)
+	t.Cleanup(func() { SetAuthChallenge("") })
+
+	result := apiErr("list services", &cloud.APIError{StatusCode: http.StatusUnauthorized})
+	challenges, _ := result.Meta["mcp/www_authenticate"].([]string)
+	if !result.IsError || len(challenges) != 1 || !strings.Contains(challenges[0], "resource_metadata=") {
+		t.Fatalf("401 result meta = %v, want the auth challenge", result.Meta)
+	}
+
+	other := apiErr("list services", &cloud.APIError{StatusCode: http.StatusForbidden})
+	if other.Meta != nil {
+		t.Fatalf("403 result carries meta %v; only an authentication failure should ask to reconnect", other.Meta)
+	}
+}

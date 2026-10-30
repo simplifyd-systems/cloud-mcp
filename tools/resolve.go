@@ -184,8 +184,10 @@ func stringField(value reflect.Value, name string) reflect.Value {
 
 // addTool registers a tool whose coordinate arguments are resolved from names
 // to slugs before the handler runs. It is a drop-in for mcp.AddTool, and every
-// tool in this package goes through it.
+// tool in this package goes through it. It also sets the tool's annotations;
+// see annotate.
 func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
+	annotate(t)
 	mcp.AddTool(s, t, func(
 		ctx context.Context,
 		req *mcp.CallToolRequest,
