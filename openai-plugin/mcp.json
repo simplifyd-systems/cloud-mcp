@@ -1,0 +1,20 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "simplifyd": {
+      "type": "streamable-http",
+      "url": "https://mcp.simplifyd.com",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "dcr" },
+            "registrationUrl": "https://api.cloud.simplifyd.com/v1/oauth/register",
+            "resource": "https://mcp.simplifyd.com",
+            "baseScopes": ["identity", "workspace", "offline_access"]
+          }
+        }
+      }
+    }
+  }
+}

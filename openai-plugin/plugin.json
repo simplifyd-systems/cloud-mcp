@@ -1,0 +1,102 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "simplifyd-cloud",
+  "version": "1.0.0",
+  "description": "Deploy and run apps, databases, static sites and DNS on Simplifyd Cloud from ChatGPT.",
+  "author": {
+    "name": "Simplifyd Systems Inc.",
+    "email": "savvy@simplifyd.com",
+    "url": "https://simplifyd.com"
+  },
+  "homepage": "https://simplifyd.com/mcp",
+  "repository": "https://github.com/simplifyd-systems/cloud-mcp",
+  "keywords": ["cloud", "hosting", "deploy", "postgres", "docker", "dns", "static sites", "nigeria"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Simplifyd Cloud",
+        "shortDescription": "Deploy apps and databases",
+        "longDescription": "Simplifyd Cloud runs your apps, databases and websites on infrastructure in Nigeria. Connect it to ChatGPT to deploy and operate them in plain language.\n\nDeploy any Docker image and give it a public URL. Create managed Postgres, MySQL and Redis databases, enable Postgres extensions and tune their settings. Publish static sites, attach custom domains and host DNS zones. Check a service's logs and its CPU, memory and disk use, find what needs scaling, and change its resources. Set environment variables and config files, and manage projects, environments and API tokens.\n\nChatGPT acts only in the workspaces you choose when you connect, and never with more access than your own role. Tools that read run without asking; tools that change or delete something ask first. Secret values such as database passwords are never returned. Services are billed per second to your Simplifyd Cloud workspace.",
+        "developerName": "Simplifyd Systems Inc.",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Deploy Docker services with public URLs",
+          "Create managed Postgres, MySQL and Redis",
+          "Publish static sites and custom domains",
+          "Read logs and CPU, memory and disk metrics",
+          "Manage DNS zones and records",
+          "Manage variables, configs and tokens"
+        ],
+        "websiteURL": "https://simplifyd.com",
+        "supportURL": "https://simplifyd.com/support",
+        "privacyPolicyURL": "https://simplifyd.com/privacy",
+        "termsOfServiceURL": "https://simplifyd.com/terms",
+        "defaultPrompt": [
+          "Deploy nginx:alpine as a service called web in my staging environment and give it a public URL.",
+          "Is my api service healthy? Check its latest logs and its CPU and memory over the last hour.",
+          "Publish a one-page static site that says Hello from Simplifyd to my staging environment."
+        ],
+        "brandColor": "#FF3E01",
+        "brandColorDark": "#FF5A00",
+        "composerIcon": "./assets/logo.png",
+        "logo": "./assets/logo.png"
+      },
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List the services in an environment",
+              "prompt": "What services are running in the production environment of my demo project?",
+              "tools_triggered": "list-services",
+              "expected_behavior": "Lists the api (Docker, traefik/whoami) and Postgres services in demo/production with their status, both running."
+            },
+            {
+              "description": "Check a service's health from its logs and metrics",
+              "prompt": "Is my api service in production healthy? Check its latest deployment logs and its CPU and memory over the last hour.",
+              "tools_triggered": "list-deployments, get-deployment-logs, get-service-metrics",
+              "expected_behavior": "Finds the active deployment, shows its log lines (including \"Starting up on port 80\"), reports CPU and memory as a share of the allocation, and concludes the service is running normally."
+            },
+            {
+              "description": "Deploy a container with a public URL",
+              "prompt": "Deploy nginx:alpine as a service called web in my staging environment and give it a public URL.",
+              "tools_triggered": "create-service, deploy-service, add-service-ingress",
+              "expected_behavior": "After confirmation, creates a Docker service named web from nginx:alpine in demo/staging, deploys it, adds HTTP ingress on port 80 and returns its https://…simplifyd.app URL."
+            },
+            {
+              "description": "Publish a static site",
+              "prompt": "Publish a one-page static site that says Hello from Simplifyd to my staging environment.",
+              "tools_triggered": "deploy-static-site",
+              "expected_behavior": "Creates a static site in demo/staging with an index.html containing the greeting and returns its live URL."
+            },
+            {
+              "description": "Enable a Postgres extension",
+              "prompt": "Enable the pg_trgm extension on the Postgres database in my production environment.",
+              "tools_triggered": "list-postgres-extensions, enable-postgres-extension",
+              "expected_behavior": "Confirms pg_trgm is on the allowlist, installs it in the app database of the Postgres service in demo/production and reports it among the installed extensions."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Buying a domain. The hosted server offers no purchase tools: it can search and price domains, but buying happens in the Simplifyd console. ChatGPT should quote the price and point to the console rather than claim to have bought it.",
+              "prompt": "Buy the domain simplifyd-review-test.com for me."
+            },
+            {
+              "description": "Reading a database password. Secret values are never returned by any tool; variables are sealed or redacted. ChatGPT should explain it cannot reveal the password and that the user can reveal unsealed values in the console.",
+              "prompt": "Show me the password for my production Postgres database."
+            },
+            {
+              "description": "Acting outside the connected workspace. The connection is limited to the workspaces approved at sign-in, so a workspace the user did not grant does not exist for these tools. ChatGPT should say it cannot find or access that workspace.",
+              "prompt": "List the services in the Acme Corp workspace."
+            }
+          ]
+        },
+        "demo_recording_url": "REPLACE_WITH_DEMO_VIDEO_URL",
+        "commerce": false,
+        "commerce_description": "The plugin sells nothing in ChatGPT. Services a user creates are billed to their existing Simplifyd Cloud workspace; topping up that workspace's wallet returns a link to Simplifyd's own checkout."
+      },
+      "publication": {
+        "release_notes": "Initial release: deploy and manage Docker services, databases, static sites, DNS, variables and tokens on Simplifyd Cloud."
+      }
+    }
+  }
+}
