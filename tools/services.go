@@ -314,7 +314,7 @@ type updateServiceArgs struct {
 	Project          string            `json:"project"                  jsonschema:"Project slug or name"`
 	Env              string            `json:"env"                      jsonschema:"Environment slug or name"`
 	Service          string            `json:"service"                  jsonschema:"Service slug"`
-	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, readiness_probe, or delete_readiness_probe"`
+	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, registry_credentials, clear_registry_credentials, readiness_probe, or delete_readiness_probe"`
 	Name             string            `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
 	VCPUs            uint              `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
 	Replicas         uint              `json:"replicas,omitempty"       jsonschema:"action: replicas. Docker: number of replicas, 1-8. Postgres: number of instances, 1-3 — a primary plus standbys on separate servers that take over if it fails; more than 1 needs a funded workspace."`
@@ -323,6 +323,8 @@ type updateServiceArgs struct {
 	Tag              string            `json:"tag,omitempty"            jsonschema:"Docker image tag, e.g. latest (action: image)"`
 	StartCommand     string            `json:"start_command,omitempty"       jsonschema:"Container executable (action: start_command)"`
 	StartCommandArgs []string          `json:"start_command_args,omitempty"  jsonschema:"Ordered arguments passed directly to the container executable (action: start_command)"`
+	RegistryUsername string            `json:"registry_username,omitempty"   jsonschema:"Registry username for the service's own credentials (action: registry_credentials)"`
+	RegistryPassword string            `json:"registry_password,omitempty"   jsonschema:"Registry password or access token for the service's own credentials (action: registry_credentials)"`
 	Probe            *serviceProbeArgs `json:"probe,omitempty" jsonschema:"HTTP readiness probe configuration (required for action: readiness_probe)"`
 }
 
@@ -389,11 +391,29 @@ func handleUpdateService(
 			return text("probe is required for action readiness_probe"), nil, nil
 		}
 	}
+	svcs := services(api, args.Workspace, args.Project, args.Env)
+	switch args.Action {
+	case "registry_credentials":
+		if args.RegistryUsername == "" || args.RegistryPassword == "" {
+			return text("registry_username and registry_password are required for action registry_credentials; use clear_registry_credentials to remove the service's own credentials"), nil, nil
+		}
+		svc, err := svcs.SetRegistryCredentials(ctx, args.Service, args.RegistryUsername, args.RegistryPassword)
+		if err != nil {
+			return apiErr("update service", err), nil, nil
+		}
+		return jsonText(svc), nil, nil
+	case "clear_registry_credentials":
+		svc, err := svcs.ClearRegistryCredentials(ctx, args.Service)
+		if err != nil {
+			return apiErr("update service", err), nil, nil
+		}
+		return jsonText(svc), nil, nil
+	}
 	probe, probeErr := readinessProbeFromArgs(args.Probe)
 	if probeErr != nil {
 		return text(probeErr.Error()), nil, nil
 	}
-	svc, err := services(api, args.Workspace, args.Project, args.Env).Update(ctx, args.Service, cloud.UpdateServiceInput{
+	svc, err := svcs.Update(ctx, args.Service, cloud.UpdateServiceInput{
 		Action:           args.Action,
 		Name:             args.Name,
 		VCPUs:            args.VCPUs,
@@ -1066,8 +1086,9 @@ func RegisterServiceTools(s *mcp.Server) {
 	}, handleCreateService)
 
 	addTool(s, &mcp.Tool{
-		Name:        "update-service",
-		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables zero-downtime rolling deploys; without one, each deploy stops the old version before starting the new one. Changes are staged and applied on the next deploy (or via approve-service-changeset).",
+		Name: "update-service",
+		Description: "Update one aspect of a service via its changeset: name, vcpus, replicas, memory, image, start_command, or readiness_probe; use delete_readiness_probe to remove readiness gating. A readiness probe enables zero-downtime rolling deploys; without one, each deploy stops the old version before starting the new one. Changes are staged and applied on the next deploy (or via approve-service-changeset). " +
+			"registry_credentials gives a Docker image service registry credentials of its own, used instead of the workspace's (see list-registry-credentials), and clear_registry_credentials returns it to the workspace's; both take effect on the service's next deploy. The password passes through this conversation, so prefer a read-only token scoped to pulling images.",
 	}, handleUpdateService)
 
 	addTool(s, &mcp.Tool{
