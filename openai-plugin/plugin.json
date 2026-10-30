@@ -90,7 +90,6 @@
             }
           ]
         },
-        "demo_recording_url": "REPLACE_WITH_DEMO_VIDEO_URL",
         "commerce": false,
         "commerce_description": "The plugin sells nothing in ChatGPT. Services a user creates are billed to their existing Simplifyd Cloud workspace; topping up that workspace's wallet returns a link to Simplifyd's own checkout."
       },
