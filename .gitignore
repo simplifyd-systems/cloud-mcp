@@ -1,2 +1,4 @@
 dist
 cloud-mcp
+# Built for upload to OpenAI's plugin portal; see openai-plugin/README.md
+simplifyd-cloud-plugin.zip
