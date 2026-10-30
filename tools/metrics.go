@@ -441,7 +441,7 @@ type serviceMetricsArgs struct {
 	Workspace     string `json:"workspace"                jsonschema:"Workspace slug or name"`
 	Project       string `json:"project"                  jsonschema:"Project slug or name"`
 	Env           string `json:"env"                      jsonschema:"Environment slug or name"`
-	Service       string `json:"service"                  jsonschema:"Service slug"`
+	Service       string `json:"service"                  jsonschema:"Service slug or name"`
 	Range         string `json:"range,omitempty"          jsonschema:"How far back to look: 1h, 6h or 1d. Defaults to 1d."`
 	IncludeSeries bool   `json:"include_series,omitempty" jsonschema:"Also return the window folded into up to 48 time buckets, to see when peaks happen. Off by default."`
 }

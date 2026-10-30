@@ -2,6 +2,7 @@
 package tools
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -133,6 +134,12 @@ func sdkFor(req *mcp.CallToolRequest) (*cloud.Client, *mcp.CallToolResult, bool)
 	return api, nil, true
 }
 
+// isRemote reports whether a call arrived over HTTP, where the server is the
+// hosted one rather than a process on the caller's own machine.
+func isRemote(req *mcp.CallToolRequest) bool {
+	return req != nil && req.Extra != nil
+}
+
 // text returns a successful CallToolResult containing a plain-text message.
 func text(s string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{
@@ -153,8 +160,27 @@ func errResult(format string, args ...any) *mcp.CallToolResult {
 	return toolError(fmt.Sprintf(format, args...))
 }
 
-// jsonText marshals v to indented JSON and returns it as a text result.
+// jsonText marshals v to indented JSON and returns it as a text result, with
+// sensitive fields redacted and empty ones dropped.
 func jsonText(v any) *mcp.CallToolResult {
+	return encodeResult(v, true)
+}
+
+// jsonTextRaw is jsonText without the redaction. It is reserved for tools whose
+// sole purpose is to return something redaction would hide: a newly created
+// credential, a file's contents, or DNS records the user must publish.
+func jsonTextRaw(v any) *mcp.CallToolResult {
+	return encodeResult(v, false)
+}
+
+// nothingToReport is returned for a call that succeeded but whose response
+// carried nothing: several API writes answer with no more than a success flag,
+// and the SDK decodes that into a zero struct. Shown as is, that reads as a
+// tool returning an empty object, which is indistinguishable from a broken one.
+// addTool replaces it with a line naming the tool.
+var nothingToReport = text("Done.")
+
+func encodeResult(v any, redact bool) *mcp.CallToolResult {
 	data, err := json.Marshal(v)
 	if err != nil {
 		return toolError("failed to encode response")
@@ -163,18 +189,87 @@ func jsonText(v any) *mcp.CallToolResult {
 	if err := json.Unmarshal(data, &public); err != nil {
 		return toolError("failed to encode response")
 	}
-	redactSensitiveFields(public)
-	return jsonTextRaw(public)
-}
+	if redact {
+		redactSensitiveFields(public)
+	}
+	public = tidy(public)
+	if public == nil {
+		return text("No results.")
+	}
+	if object, ok := public.(map[string]any); ok && allZero(object) {
+		return nothingToReport
+	}
 
-// jsonTextRaw is reserved for tools whose sole purpose is explicit, documented
-// disclosure of a newly-created or requested credential.
-func jsonTextRaw(v any) *mcp.CallToolResult {
-	data, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	// Config files and static sites are HTML and templates; escaping < and >
+	// as \u003c makes them unreadable for no benefit outside a browser.
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(public); err != nil {
 		return toolError("failed to encode response")
 	}
-	return text(string(data))
+	return text(strings.TrimSuffix(buf.String(), "\n"))
+}
+
+// zeroTime is how the API spells a timestamp it did not fill in.
+const zeroTime = "0001-01-01T00:00:00Z"
+
+// tidy drops what carries no information from a decoded response: nulls, empty
+// strings, unset timestamps, and the per-type blocks of a service ("kafka_svc",
+// "email_svc", ...) that are all zero because the service is of another type.
+// Anthropic's directory review rejects responses padded beyond the task, and a
+// service listed with seven empty blocks is mostly padding.
+//
+// Zero numbers and false are kept elsewhere: "replicas": 0 and
+// "has_verified_domain": false are answers, not padding.
+func tidy(v any) any {
+	switch value := v.(type) {
+	case map[string]any:
+		for key, child := range value {
+			child = tidy(child)
+			switch {
+			case child == nil, child == "", child == zeroTime:
+				delete(value, key)
+			case strings.HasSuffix(key, "_svc") && allZero(child):
+				delete(value, key)
+			default:
+				value[key] = child
+			}
+		}
+		return value
+	case []any:
+		for i, child := range value {
+			value[i] = tidy(child)
+		}
+		return value
+	}
+	return v
+}
+
+// allZero reports whether v holds no information: every leaf is null, an empty
+// string, false or zero.
+func allZero(v any) bool {
+	switch value := v.(type) {
+	case nil:
+		return true
+	case string:
+		return value == "" || value == zeroTime
+	case bool:
+		return !value
+	case float64:
+		return value == 0
+	case map[string]any:
+		for _, child := range value {
+			if !allZero(child) {
+				return false
+			}
+		}
+		return true
+	case []any:
+		return len(value) == 0
+	}
+	return false
 }
 
 var sensitiveResponseFields = map[string]string{
@@ -234,6 +329,15 @@ func apiErr(op string, err error) *mcp.CallToolResult {
 	var apiError *cloud.APIError
 	if errors.As(err, &apiError) {
 		log.Printf("operation failed request_id=%s operation=%q status=%d", requestID, op, apiError.StatusCode)
+		// A 4xx is the caller's to fix, and the API says how in words written
+		// for the customer: "port 80 is already exposed as TCP", "configure a
+		// backup destination first". Without them the model can neither correct
+		// the call nor tell the person why it failed, and Anthropic's review
+		// fails tools that answer with a bare "request rejected". A 5xx or a
+		// transport error stays generic: those messages can carry internals.
+		if message := customerMessage(apiError); message != "" {
+			return errResult("%s: %s (reference %s)", op, message, requestID)
+		}
 		switch apiError.StatusCode {
 		case http.StatusBadRequest, http.StatusUnprocessableEntity:
 			return errResult("%s: request rejected (reference %s)", op, requestID)
@@ -251,6 +355,23 @@ func apiErr(op string, err error) *mcp.CallToolResult {
 	}
 	log.Printf("operation failed request_id=%s operation=%q error_type=%T", requestID, op, err)
 	return errResult("%s: request failed (reference %s)", op, requestID)
+}
+
+// customerMessage returns the API's explanation of a refusal, or "" when there
+// is none fit to show. The SDK fills Message with "HTTP <status>" when the body
+// had no message of its own, which says nothing the status does not.
+func customerMessage(apiError *cloud.APIError) string {
+	switch apiError.StatusCode {
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound,
+		http.StatusConflict, http.StatusUnprocessableEntity:
+	default:
+		return ""
+	}
+	message := strings.TrimSpace(apiError.Message)
+	if message == "" || strings.HasPrefix(message, "HTTP ") {
+		return ""
+	}
+	return message
 }
 
 func newRequestID() string {

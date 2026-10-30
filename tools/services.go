@@ -15,7 +15,7 @@ type svcArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Service slug"`
+	Service   string `json:"service"   jsonschema:"Service slug or name"`
 }
 
 // services returns a ServicesClient scoped to the given workspace/project/env,
@@ -88,7 +88,7 @@ type postgresParametersArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug"`
+	Service   string `json:"service"   jsonschema:"Managed PostgreSQL service slug or name"`
 }
 
 func handleGetPostgresParameters(
@@ -111,7 +111,7 @@ type updatePostgresParametersArgs struct {
 	Workspace  string            `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project    string            `json:"project"    jsonschema:"Project slug or name"`
 	Env        string            `json:"env"        jsonschema:"Environment slug or name"`
-	Service    string            `json:"service"    jsonschema:"Managed PostgreSQL service slug"`
+	Service    string            `json:"service"    jsonschema:"Managed PostgreSQL service slug or name"`
 	Parameters map[string]string `json:"parameters" jsonschema:"Complete replacement map of supported PostgreSQL parameter names to string values; use an empty map to restore platform defaults"`
 }
 
@@ -141,7 +141,7 @@ type createServiceArgs struct {
 	Workspace          string            `json:"workspace"    jsonschema:"Workspace slug or name"`
 	Project            string            `json:"project"      jsonschema:"Project slug or name"`
 	Env                string            `json:"env"          jsonschema:"Environment slug or name"`
-	Name               string            `json:"name"         jsonschema:"Service display name"`
+	Name               string            `json:"name"         jsonschema:"Service display name. A postgres service is always named Postgres, whatever is given here."`
 	Type               string            `json:"type"         jsonschema:"Service type: docker, postgres, mysql, redis, http_gateway, s3_bucket, static_site, or email. For static_site prefer the deploy-static-site tool, which creates and publishes in one call. An email service sends through Why.email; add a domain to it with add-email-domain before anything can be sent."`
 	Image              string            `json:"image,omitempty"          jsonschema:"Docker image without tag (required for docker type, e.g. nginx)"`
 	Tag                string            `json:"tag,omitempty"            jsonschema:"Docker image tag (e.g. latest)"`
@@ -191,7 +191,7 @@ func handleConfigureMySQLBackup(
 	usingBucket := args.BucketService != ""
 	usingExplicit := args.BucketName != ""
 	if args.Frequency != "" && usingBucket == usingExplicit {
-		return text("give either bucket_service or bucket_name with credentials, not both"), nil, nil
+		return toolError("give either bucket_service or bucket_name with credentials, not both"), nil, nil
 	}
 
 	in := cloud.MySQLBackupInput{
@@ -206,7 +206,7 @@ func handleConfigureMySQLBackup(
 
 	svcs := services(api, args.Workspace, args.Project, args.Env)
 	if err := svcs.ConfigureMySQLBackup(ctx, args.Service, in); err != nil {
-		return text(err.Error()), nil, nil
+		return apiErr("configure MySQL backup", err), nil, nil
 	}
 
 	if args.Frequency == "" {
@@ -313,7 +313,7 @@ type updateServiceArgs struct {
 	Workspace        string            `json:"workspace"                jsonschema:"Workspace slug or name"`
 	Project          string            `json:"project"                  jsonschema:"Project slug or name"`
 	Env              string            `json:"env"                      jsonschema:"Environment slug or name"`
-	Service          string            `json:"service"                  jsonschema:"Service slug"`
+	Service          string            `json:"service"                  jsonschema:"Service slug or name"`
 	Action           string            `json:"action"                   jsonschema:"What to update: name, vcpus, replicas, memory, image, start_command, registry_credentials, clear_registry_credentials, readiness_probe, or delete_readiness_probe"`
 	Name             string            `json:"name,omitempty"           jsonschema:"New service name (action: name)"`
 	VCPUs            uint              `json:"vcpus,omitempty"          jsonschema:"Number of virtual CPUs (action: vcpus)"`
@@ -472,7 +472,7 @@ type setServiceVariablesArgs struct {
 	Workspace string            `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string            `json:"project"    jsonschema:"Project slug or name"`
 	Env       string            `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string            `json:"service"    jsonschema:"Service slug"`
+	Service   string            `json:"service"    jsonschema:"Service slug or name"`
 	Variables map[string]string `json:"variables"  jsonschema:"Map of variable names to values to set (bulk)"`
 }
 
@@ -497,7 +497,7 @@ type addSvcVarArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Name      string `json:"name"       jsonschema:"Variable name"`
 	Value     string `json:"value"      jsonschema:"Variable value"`
 	Sealed    *bool  `json:"sealed,omitempty" jsonschema:"Optional. Omitted: a new variable is sealed (its value can never be read back by anyone) and an existing one stays as it is. false: the user can reveal the value in the dashboard; use it only for a value the user will need to read, such as a login they chose you to generate"`
@@ -546,7 +546,7 @@ type deleteSvcVarArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Variable  string `json:"variable"   jsonschema:"Variable slug or ID to delete"`
 }
 
@@ -572,7 +572,7 @@ type addSharedVarArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Variable  string `json:"variable"   jsonschema:"Shared environment variable slug to link to this service"`
 }
 
@@ -597,7 +597,7 @@ type addIngressArgs struct {
 	Workspace  string `json:"workspace"             jsonschema:"Workspace slug or name"`
 	Project    string `json:"project"               jsonschema:"Project slug or name"`
 	Env        string `json:"env"                   jsonschema:"Environment slug or name"`
-	Service    string `json:"service"               jsonschema:"Service slug"`
+	Service    string `json:"service"               jsonschema:"Service slug or name"`
 	CustomFQDN string `json:"custom_fqdn,omitempty" jsonschema:"Custom fully qualified domain name (leave empty for auto-generated subdomain)"`
 	Port       int    `json:"port,omitempty"        jsonschema:"Container port to route traffic to"`
 	Protocol   string `json:"protocol,omitempty"    jsonschema:"Protocol: http (default) or grpc"`
@@ -633,7 +633,7 @@ type deleteIngressArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	FQDN      string `json:"fqdn"       jsonschema:"Fully qualified domain name to remove"`
 }
 
@@ -658,7 +658,7 @@ type tcpProxyArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Port      uint   `json:"port"       jsonschema:"Container port to expose via TCP proxy"`
 }
 
@@ -666,7 +666,7 @@ type addTCPProxyArgs struct {
 	Workspace           string   `json:"workspace"                       jsonschema:"Workspace slug or name"`
 	Project             string   `json:"project"                         jsonschema:"Project slug or name"`
 	Env                 string   `json:"env"                             jsonschema:"Environment slug or name"`
-	Service             string   `json:"service"                         jsonschema:"Service slug"`
+	Service             string   `json:"service"                         jsonschema:"Service slug or name"`
 	Port                uint     `json:"port"                            jsonschema:"Container port to expose via TCP proxy"`
 	AllowedSourceRanges []string `json:"allowed_source_ranges,omitempty" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty means open to all"`
 }
@@ -680,11 +680,15 @@ func handleAddTCPProxy(
 	if !ok {
 		return r, nil, nil
 	}
-	result, err := services(api, args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port, args.AllowedSourceRanges...)
-	if err != nil {
+	// The response is only a success flag.
+	if _, err := services(api, args.Workspace, args.Project, args.Env).AddTCPProxy(ctx, args.Service, args.Port, args.AllowedSourceRanges...); err != nil {
 		return apiErr("add TCP proxy", err), nil, nil
 	}
-	return jsonText(result), nil, nil
+	// The proxy is staged, not live: say so, and where its address appears,
+	// rather than echoing a bare success flag.
+	return text(fmt.Sprintf(
+		"TCP proxy for port %d staged. It takes effect on the next deploy (deploy-service); "+
+			"get-service then lists it under ingress_ports with its public address.", args.Port)), nil, nil
 }
 
 // ---- set-ingress-source-ranges ----
@@ -693,7 +697,7 @@ type setIngressSourceRangesArgs struct {
 	Workspace           string   `json:"workspace"             jsonschema:"Workspace slug or name"`
 	Project             string   `json:"project"               jsonschema:"Project slug or name"`
 	Env                 string   `json:"env"                   jsonschema:"Environment slug or name"`
-	Service             string   `json:"service"               jsonschema:"Service slug"`
+	Service             string   `json:"service"               jsonschema:"Service slug or name"`
 	Ingress             string   `json:"ingress"               jsonschema:"Ingress port slug (from get-service ingress list)"`
 	AllowedSourceRanges []string `json:"allowed_source_ranges" jsonschema:"Client IPs/CIDRs allowed to connect (bare IPs treated as /32); empty list opens the port to all IPs"`
 }
@@ -768,7 +772,7 @@ type getConfigArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Service slug"`
+	Service   string `json:"service"   jsonschema:"Service slug or name"`
 	Config    string `json:"config"    jsonschema:"Config slug, display name, or mount path"`
 }
 
@@ -797,7 +801,7 @@ type addConfigArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Name      string `json:"name"       jsonschema:"Config file display name"`
 	Content   string `json:"content"    jsonschema:"File content; supports ${{VAR_NAME}} interpolation of service variables at deploy time"`
 	MountPath string `json:"mount_path" jsonschema:"Absolute path where the file is mounted in the container, e.g. /etc/nginx/nginx.conf"`
@@ -827,7 +831,7 @@ type updateConfigArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Config    string `json:"config"     jsonschema:"Config slug to update"`
 	Name      string `json:"name"       jsonschema:"Config file display name"`
 	Content   string `json:"content"    jsonschema:"File content"`
@@ -858,7 +862,7 @@ type deleteConfigArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Config    string `json:"config"     jsonschema:"Config slug to delete"`
 }
 
@@ -889,7 +893,7 @@ type addVolumeArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Name      string `json:"name"       jsonschema:"Volume display name, e.g. data"`
 	MountPath string `json:"mount_path" jsonschema:"Absolute path where the volume is mounted in the container, e.g. /data"`
 	SizeGB    int    `json:"size_gb"    jsonschema:"Size in GB (1-1000). It can be raised later but never lowered."`
@@ -919,7 +923,7 @@ type updateVolumeArgs struct {
 	Workspace string `json:"workspace"  jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"    jsonschema:"Project slug or name"`
 	Env       string `json:"env"        jsonschema:"Environment slug or name"`
-	Service   string `json:"service"    jsonschema:"Service slug"`
+	Service   string `json:"service"    jsonschema:"Service slug or name"`
 	Volume    string `json:"volume"     jsonschema:"Volume slug to update"`
 	Name      string `json:"name"       jsonschema:"Volume display name"`
 	MountPath string `json:"mount_path" jsonschema:"Absolute mount path in the container"`
@@ -950,7 +954,7 @@ type deleteVolumeArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Service slug"`
+	Service   string `json:"service"   jsonschema:"Service slug or name"`
 	Volume    string `json:"volume"    jsonschema:"Volume slug to detach"`
 }
 
@@ -1007,8 +1011,8 @@ type grantPrivateAccessArgs struct {
 	Workspace       string `json:"workspace"       jsonschema:"Workspace slug or name"`
 	Project         string `json:"project"         jsonschema:"Destination service project slug"`
 	Env             string `json:"env"             jsonschema:"Destination service environment slug or name"`
-	Service         string `json:"service"         jsonschema:"Destination service slug"`
-	ConsumerProject string `json:"consumer_project" jsonschema:"Consumer project slug in the same workspace"`
+	Service         string `json:"service"         jsonschema:"Destination service slug or name"`
+	ConsumerProject string `json:"consumer_project" jsonschema:"Consumer project slug or name, in the same workspace"`
 	Protocol        string `json:"protocol"        jsonschema:"Private protocol: TCP or UDP"`
 	Port            uint   `json:"port"            jsonschema:"Destination private port, 1-65535"`
 }

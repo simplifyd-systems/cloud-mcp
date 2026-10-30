@@ -2,10 +2,13 @@ package tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	cloud "github.com/simplifyd-systems/cloud-go-sdk"
 )
 
 // Email service tools.
@@ -24,14 +27,14 @@ type emailServiceArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Email service slug"`
+	Service   string `json:"service"   jsonschema:"Email service slug or name"`
 }
 
 type emailDomainArgs struct {
 	Workspace string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project   string `json:"project"   jsonschema:"Project slug or name"`
 	Env       string `json:"env"       jsonschema:"Environment slug or name"`
-	Service   string `json:"service"   jsonschema:"Email service slug"`
+	Service   string `json:"service"   jsonschema:"Email service slug or name"`
 	Domain    string `json:"domain"    jsonschema:"For add-email-domain, the domain to send from, e.g. mail.example.com. A subdomain keeps this mail separate from the domain's own. For verify and remove, the domain id returned by add-email-domain or list-email-domains."`
 }
 
@@ -44,7 +47,10 @@ func handleListEmailDomains(ctx context.Context, req *mcp.CallToolRequest, args 
 	if err != nil {
 		return apiErr("list email domains", err), nil, nil
 	}
-	return jsonText(domains), nil, nil
+	// Raw: each record's "value" is what the person must publish at their DNS
+	// provider, and public once they do; redaction would hide the one thing
+	// this call is for.
+	return jsonTextRaw(domains), nil, nil
 }
 
 func handleAddEmailDomain(ctx context.Context, req *mcp.CallToolRequest, args emailDomainArgs) (*mcp.CallToolResult, any, error) {
@@ -75,6 +81,14 @@ func handleVerifyEmailDomain(ctx context.Context, req *mcp.CallToolRequest, args
 		return r, nil, nil
 	}
 	d, err := services(api, args.Workspace, args.Project, args.Env).Email(args.Service).VerifyDomain(ctx, args.Domain)
+	// The API answers a check that found the records missing with a 400, but
+	// to the person that is the normal state of a domain just added, not a
+	// failed call: say what to do next.
+	var apiError *cloud.APIError
+	if errors.As(err, &apiError) && apiError.StatusCode == http.StatusBadRequest {
+		return text("Not verified yet: the DNS records from add-email-domain are not all visible. " +
+			"list-email-domains shows them; check each is published exactly as given, then try again in a few minutes."), nil, nil
+	}
 	if err != nil {
 		return apiErr("verify email domain", err), nil, nil
 	}

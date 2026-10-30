@@ -116,18 +116,38 @@ func resolveEnv(ctx context.Context, api *cloud.Client, workspace, project, ref 
 	return "", notFound("environment", ref, names)
 }
 
+// resolveService turns a service name into its slug within an environment.
+func resolveService(ctx context.Context, api *cloud.Client, workspace, project, env, ref string) (string, error) {
+	if ref == "" || isSlug(ref) {
+		return ref, nil
+	}
+	svcs, err := services(api, workspace, project, env).List(ctx)
+	if err != nil {
+		return "", fmt.Errorf("could not look up service %q: %w", ref, err)
+	}
+	names := make([]string, 0, len(svcs))
+	for _, svc := range svcs {
+		if strings.EqualFold(svc.Name, ref) {
+			return svc.Slug, nil
+		}
+		names = append(names, svc.Name)
+	}
+	return "", notFound("service", ref, names)
+}
+
 // notFound builds the miss message. The available names are listed because the
 // caller is usually a model that can retry immediately with a corrected value,
 // and otherwise has no way to discover what it got wrong.
 func notFound(kind, ref string, available []string) error {
 	if len(available) == 0 {
-		return fmt.Errorf("no %s named %q, and none are visible to this token", kind, ref)
+		return fmt.Errorf("no %s named %q, and there are none you can access here", kind, ref)
 	}
 	return fmt.Errorf("no %s named %q — available: %s", kind, ref, strings.Join(available, ", "))
 }
 
-// resolveArgs rewrites the Workspace, Project and Env fields of an arguments
-// struct in place, replacing any name with its slug.
+// resolveArgs rewrites the Workspace, Project, Env and Service fields of an
+// arguments struct in place, replacing any name with its slug. ConsumerProject,
+// the other project a cross-project grant names, is resolved like Project.
 //
 // Reflection rather than a per-tool edit: all ~60 tools spell these
 // coordinates the same way, and a resolution step that has to be remembered at
@@ -147,6 +167,8 @@ func resolveArgs(ctx context.Context, api *cloud.Client, args any) error {
 	workspace := stringField(value, "Workspace")
 	project := stringField(value, "Project")
 	env := stringField(value, "Env")
+	service := stringField(value, "Service")
+	consumer := stringField(value, "ConsumerProject")
 
 	if workspace.IsValid() {
 		resolved, err := resolveWorkspace(ctx, api, workspace.String())
@@ -168,6 +190,20 @@ func resolveArgs(ctx context.Context, api *cloud.Client, args any) error {
 			return err
 		}
 		env.SetString(resolved)
+	}
+	if service.IsValid() && workspace.IsValid() && project.IsValid() && env.IsValid() {
+		resolved, err := resolveService(ctx, api, workspace.String(), project.String(), env.String(), service.String())
+		if err != nil {
+			return err
+		}
+		service.SetString(resolved)
+	}
+	if consumer.IsValid() && workspace.IsValid() {
+		resolved, err := resolveProject(ctx, api, workspace.String(), consumer.String())
+		if err != nil {
+			return err
+		}
+		consumer.SetString(resolved)
 	}
 	return nil
 }
@@ -201,6 +237,10 @@ func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h mcp.ToolHandlerFor[In, O
 		if err := resolveArgs(ctx, api, &args); err != nil {
 			return toolError(err.Error()), zero, nil
 		}
-		return h(ctx, req, args)
+		result, out, err := h(ctx, req, args)
+		if result == nothingToReport {
+			result = text(t.Title + " succeeded.")
+		}
+		return result, out, err
 	})
 }

@@ -34,7 +34,7 @@ type deploymentArgs struct {
 	Workspace  string `json:"workspace"   jsonschema:"Workspace slug or name"`
 	Project    string `json:"project"     jsonschema:"Project slug or name"`
 	Env        string `json:"env"         jsonschema:"Environment slug or name"`
-	Service    string `json:"service"     jsonschema:"Service slug"`
+	Service    string `json:"service"     jsonschema:"Service slug or name"`
 	Deployment string `json:"deployment"  jsonschema:"Deployment slug (UUID)"`
 }
 
@@ -60,7 +60,7 @@ type deployServiceArgs struct {
 	Workspace             string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project               string `json:"project"   jsonschema:"Project slug or name"`
 	Env                   string `json:"env"       jsonschema:"Environment slug or name"`
-	Service               string `json:"service"   jsonschema:"Service slug"`
+	Service               string `json:"service"   jsonschema:"Service slug or name"`
 	AutoApproveChangesets bool   `json:"auto_approve_changesets,omitempty" jsonschema:"Automatically approve any pending changesets before deploying (otherwise the deploy fails if changes are pending)"`
 }
 
@@ -87,7 +87,7 @@ type redeployServiceArgs struct {
 	Workspace             string `json:"workspace" jsonschema:"Workspace slug or name"`
 	Project               string `json:"project"   jsonschema:"Project slug or name"`
 	Env                   string `json:"env"       jsonschema:"Environment slug or name"`
-	Service               string `json:"service"   jsonschema:"Service slug"`
+	Service               string `json:"service"   jsonschema:"Service slug or name"`
 	AutoApproveChangesets bool   `json:"auto_approve_changesets,omitempty" jsonschema:"Automatically approve any pending changesets before redeploying"`
 }
 
@@ -131,7 +131,7 @@ type deploymentLogsArgs struct {
 	Workspace  string `json:"workspace"            jsonschema:"Workspace slug or name"`
 	Project    string `json:"project"              jsonschema:"Project slug or name"`
 	Env        string `json:"env"                  jsonschema:"Environment slug or name"`
-	Service    string `json:"service"              jsonschema:"Service slug"`
+	Service    string `json:"service"              jsonschema:"Service slug or name"`
 	Deployment string `json:"deployment"           jsonschema:"Deployment slug (UUID)"`
 	MaxLines   int    `json:"max_lines,omitempty"  jsonschema:"Maximum log lines to return (default 500)"`
 }
