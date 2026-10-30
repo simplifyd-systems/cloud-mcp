@@ -168,3 +168,23 @@ func TestCrossOriginRequestRefused(t *testing.T) {
 		t.Fatalf("status = %d, want 403 for a disallowed origin", rec.Code)
 	}
 }
+
+// OpenAI's portal verifies the domain by fetching this path and comparing the
+// body to the token it issued, byte for byte.
+func TestOpenAIAppsChallenge(t *testing.T) {
+	rec := httptest.NewRecorder()
+	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unconfigured challenge status = %d, want 404", rec.Code)
+	}
+
+	t.Setenv("OPENAI_APPS_CHALLENGE", "tok_123\n")
+	rec = httptest.NewRecorder()
+	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	if rec.Code != http.StatusOK || rec.Body.String() != "tok_123" {
+		t.Fatalf("challenge = %d %q, want 200 %q", rec.Code, rec.Body.String(), "tok_123")
+	}
+	if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/plain") {
+		t.Fatalf("Content-Type = %q, want text/plain", ct)
+	}
+}

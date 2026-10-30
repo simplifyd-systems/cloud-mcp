@@ -60,26 +60,9 @@ func main() {
 		Version: serverVersion,
 	}, nil)
 
-	// Register all tool groups. Only the auth group differs between
-	// transports: the login tool is local-only.
-	tools.RegisterAuthTools(server, local)
-	tools.RegisterWorkspaceTools(server)
-	tools.RegisterProjectTools(server)
-	tools.RegisterEnvironmentTools(server)
-	tools.RegisterServiceTools(server)
-	tools.RegisterPostgresExtensionTools(server)
-	tools.RegisterRegistryRetentionTools(server)
-	tools.RegisterRegistryCredentialTools(server)
-	tools.RegisterStaticSiteTools(server)
-	tools.RegisterVideoTools(server)
-	tools.RegisterEmailTools(server)
-	tools.RegisterDomainTools(server)
-	tools.RegisterDNSTools(server)
-	tools.RegisterDeploymentTools(server)
-	tools.RegisterTokenTools(server)
-	tools.RegisterAlertTools(server)
-	tools.RegisterMetricsTools(server)
-	tools.RegisterTemplateTools(server)
+	// Only the auth group differs between transports: the login tool is
+	// local-only.
+	tools.RegisterAll(server, local)
 
 	if local {
 		if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
@@ -103,6 +86,13 @@ func serveHTTP(server *mcp.Server) error {
 	if addr == "" {
 		addr = ":8080"
 	}
+
+	// A token that expires mid-session still reaches the tools, which learn it
+	// from the API's 401. They answer with this challenge so the client can
+	// re-authorize instead of showing a dead end.
+	tools.SetAuthChallenge(challengeValue(
+		"invalid_token", "Your Simplifyd Cloud sign-in has expired. Reconnect to continue.",
+	))
 
 	mux := newMux(mcp.NewStreamableHTTPHandler(
 		func(*http.Request) *mcp.Server { return server },
