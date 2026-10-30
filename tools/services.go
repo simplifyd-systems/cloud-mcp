@@ -190,8 +190,11 @@ func handleConfigureMySQLBackup(
 
 	usingBucket := args.BucketService != ""
 	usingExplicit := args.BucketName != ""
-	if args.Frequency != "" && usingBucket == usingExplicit {
+	if args.Frequency != "" && usingBucket && usingExplicit {
 		return toolError("give either bucket_service or bucket_name with credentials, not both"), nil, nil
+	}
+	if args.Frequency != "" && !usingBucket && !usingExplicit {
+		return toolError("say where backups go: bucket_service (a bucket service in this environment), or bucket_name with endpoint_url and credentials"), nil, nil
 	}
 
 	in := cloud.MySQLBackupInput{
