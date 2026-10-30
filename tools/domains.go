@@ -323,7 +323,11 @@ func handleRenewDomain(ctx context.Context, req *mcp.CallToolRequest, args renew
 	return text(msg), nil, nil
 }
 
-func RegisterDomainTools(s *mcp.Server) {
+// RegisterDomainTools registers the domain tools on s. Buying and renewing are
+// registered only when local is true (stdio): the hosted server is listed in
+// the Claude and ChatGPT directories, neither of which accepts tools that spend
+// money, so over HTTP a person buys and renews in the console instead.
+func RegisterDomainTools(s *mcp.Server, local bool) {
 	addTool(s, &mcp.Tool{
 		Name: "search-domains",
 		Description: "Search for domain names to buy, with whether each is available and its first-year price " +
@@ -346,6 +350,19 @@ func RegisterDomainTools(s *mcp.Server) {
 		Description: "Get a domain's details: expiry, auto-renewal, transfer lock, nameservers, registrant and orders.",
 	}, handleGetDomain)
 
+	if local {
+		registerDomainPurchaseTools(s)
+	}
+
+	addTool(s, &mcp.Tool{
+		Name: "update-domain",
+		Description: "Turn a domain's automatic renewal or registrar transfer lock on or off. The transfer code " +
+			"itself is only shown in the console and CLI.",
+	}, handleUpdateDomain)
+}
+
+// registerDomainPurchaseTools registers the tools that charge the wallet.
+func registerDomainPurchaseTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "register-domain",
 		Description: "Buy a domain name, paid from the workspace wallet (owners and developers only). Takes two " +
@@ -360,10 +377,4 @@ func RegisterDomainTools(s *mcp.Server) {
 		Description: "Renew a domain now, paid from the workspace wallet. Domains with auto-renewal on renew " +
 			"themselves 30 days before expiry. Charges only when confirm is true, which needs the person's agreement.",
 	}, handleRenewDomain)
-
-	addTool(s, &mcp.Tool{
-		Name: "update-domain",
-		Description: "Turn a domain's automatic renewal or registrar transfer lock on or off. The transfer code " +
-			"itself is only shown in the console and CLI.",
-	}, handleUpdateDomain)
 }

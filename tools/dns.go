@@ -101,7 +101,7 @@ func handleListDNSZones(ctx context.Context, req *mcp.CallToolRequest, args work
 		return customerErr("list DNS zones", err), nil, nil
 	}
 	if len(list.Zones) == 0 {
-		return text("This workspace hosts no DNS zones. Add one with add-dns-zone, or buy a domain with register-domain."), nil, nil
+		return text("This workspace hosts no DNS zones. Add one with add-dns-zone, or buy a domain through Simplifyd Cloud, which comes with its zone."), nil, nil
 	}
 	var b strings.Builder
 	for i := range list.Zones {
@@ -279,7 +279,7 @@ func RegisterDNSTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "add-dns-zone",
 		Description: "Host DNS for a domain registered elsewhere. The zone is pending until the person changes the " +
-			"domain's nameservers at its registrar to the ones returned. A domain bought with register-domain " +
+			"domain's nameservers at its registrar to the ones returned. A domain bought through Simplifyd Cloud " +
 			"already has its zone; do not add one.",
 	}, handleAddDNSZone)
 

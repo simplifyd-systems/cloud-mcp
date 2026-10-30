@@ -165,6 +165,31 @@ func TestDomainErrorsCarryTheAPIsReason(t *testing.T) {
 // Registration infers each tool's input schema, and panics on one it cannot.
 func TestDomainAndDNSToolsRegister(t *testing.T) {
 	s := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	RegisterDomainTools(s)
+	RegisterDomainTools(s, true)
 	RegisterDNSTools(s)
+}
+
+// The hosted server is listed in directories that refuse tools which spend
+// money, so buying and renewing must exist only over stdio.
+func TestDomainPurchaseToolsAreStdioOnly(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		local bool
+	}{
+		{"stdio", true},
+		{"http", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+			RegisterDomainTools(server, tc.local)
+			for _, name := range []string{"register-domain", "renew-domain"} {
+				if got := hasTool(t, server, name); got != tc.local {
+					t.Errorf("%s registered = %v, want %v", name, got, tc.local)
+				}
+			}
+			if !hasTool(t, server, "search-domains") || !hasTool(t, server, "update-domain") {
+				t.Error("the other domain tools must be registered on both transports")
+			}
+		})
+	}
 }
