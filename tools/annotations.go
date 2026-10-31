@@ -95,7 +95,8 @@ var destructiveTools = toolSet(
 	"deploy-static-site",
 	"disable-postgres-extension",
 	"discard-service-changeset",
-	"register-domain", // paid from the wallet
+	"redeploy-service", // replaces the running deployment, like deploy-service
+	"register-domain",  // paid from the wallet
 	"remove-email-domain",
 	"remove-registry-credential",
 	"remove-static-site-domain",
@@ -145,7 +146,6 @@ var additiveTools = toolSet(
 	"fund-workspace", // only returns a payment link; nothing is charged
 	"grant-private-service-access",
 	"login",
-	"redeploy-service",
 	"update-environment",
 	"update-project",
 	"update-service", // stages a changeset; nothing changes until it is approved
@@ -154,11 +154,43 @@ var additiveTools = toolSet(
 	"upload-video",
 )
 
-// openWorldTools reach beyond the caller's own workspace. Every other tool acts
-// only on resources the caller's workspace owns.
+// openWorldTools reach beyond the caller's own workspace: they change what the
+// public internet sees (DNS, a public URL or port), pull from a registry the
+// person controls, write to backup storage, or act through a third party such
+// as a registrar, an email provider or a payment provider. Every other tool
+// acts only on resources the caller's workspace owns. ChatGPT's review rejects
+// a tool marked closed-world that does any of these.
 var openWorldTools = toolSet(
+	"add-dns-record",
+	"add-dns-zone",
+	"add-email-domain",
+	"add-service-ingress", // registers the public hostname with Cloudflare
+	"add-static-site-domain",
+	"add-tcp-proxy",
+	"add-workspace-member",      // emails the invitation
+	"approve-service-changeset", // rolls the change out, pulling the image
+	"check-dns-zone",            // looks the domain's nameservers up in public DNS
+	"configure-mysql-backup",
+	"create-postgres-backup",
+	"delete-dns-record",
+	"delete-dns-zone",
+	"delete-service-ingress",
+	"delete-tcp-proxy",
+	"deploy-service", // pulls the image from its registry
+	"deploy-static-site",
+	"fund-workspace", // a Paystack or Stripe payment link
 	"quote-domain",
+	"redeploy-service",
+	"remove-email-domain",
+	"remove-static-site-domain",
 	"search-domains",
+	"set-ingress-source-ranges",
+	"set-static-site-domain",
+	"set-video-playback-domain",
+	"undeploy-service",
+	"update-dns-record",
+	"update-domain", // changes the registrar's renewal and lock settings
+	"verify-email-domain",
 )
 
 func toolSet(names ...string) map[string]bool {
