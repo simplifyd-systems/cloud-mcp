@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "simplifyd-cloud",
-  "version": "1.0.0",
-  "description": "Deploy and run apps, databases, static sites and DNS on Simplifyd Cloud from ChatGPT.",
+  "version": "1.0.3",
+  "description": "Inspect your existing Simplifyd Cloud services, deployments, PostgreSQL extensions, and DNS from ChatGPT and Codex.",
   "author": {
     "name": "Simplifyd Systems Inc.",
     "email": "savvy@simplifyd.com",
@@ -10,31 +10,29 @@
   },
   "homepage": "https://simplifyd.com/mcp",
   "repository": "https://github.com/simplifyd-systems/cloud-mcp",
-  "keywords": ["cloud", "hosting", "deploy", "postgres", "docker", "dns", "static sites", "nigeria"],
+  "keywords": ["cloud", "monitoring", "postgres", "dns", "nigeria"],
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Simplifyd Cloud",
-        "shortDescription": "Deploy apps and databases",
-        "longDescription": "Simplifyd Cloud runs your apps, databases and websites on infrastructure in Nigeria. Connect it to ChatGPT to deploy and operate them in plain language.\n\nDeploy any Docker image and give it a public URL. Create managed Postgres, MySQL and Redis databases, enable Postgres extensions and tune their settings. Publish static sites, attach custom domains and host DNS zones. Check a service's logs and its CPU, memory and disk use, find what needs scaling, and change its resources. Set environment variables and config files, and manage projects, environments and API tokens.\n\nChatGPT acts only in the workspaces you choose when you connect, and never with more access than your own role. Tools that read run without asking; tools that change or delete something ask first. Secret values such as database passwords are never returned. Services are billed per second to your Simplifyd Cloud workspace.",
+        "shortDescription": "Inspect cloud services and DNS",
+        "longDescription": "Connect your existing Simplifyd Cloud account to inspect the workspaces you share. List projects, environments, services and deployments. Check CPU, memory and disk usage or see which extensions are installed on a managed PostgreSQL database. View registered domain status, expiry and nameservers. For a pending hosted DNS zone, you can confirm a delegation check that activates the zone and publishes its stored records once its nameservers point to Simplifyd Cloud.",
         "developerName": "Simplifyd Systems Inc.",
         "category": "Developer Tools",
         "capabilities": [
-          "Deploy Docker services with public URLs",
-          "Create managed Postgres, MySQL and Redis",
-          "Publish static sites and custom domains",
-          "Read logs and CPU, memory and disk metrics",
-          "Manage DNS zones and records",
-          "Manage variables, configs and tokens"
+          "Inspect existing services and deployment status",
+          "Summarize CPU, memory, and disk usage",
+          "List installed PostgreSQL extensions",
+          "Check domain expiry and DNS delegation"
         ],
         "websiteURL": "https://simplifyd.com",
         "supportURL": "https://simplifyd.com/support",
         "privacyPolicyURL": "https://simplifyd.com/privacy",
         "termsOfServiceURL": "https://simplifyd.com/terms",
         "defaultPrompt": [
-          "Deploy nginx:alpine as a service called web in my staging environment and give it a public URL.",
-          "Is my api service healthy? Check its latest logs and its CPU and memory over the last hour.",
-          "Publish a one-page static site that says Hello from Simplifyd to my staging environment."
+          "Which services are running in production?",
+          "Show my API service's active deployment and CPU and memory usage over the last hour.",
+          "Which PostgreSQL extensions are installed in my production database?"
         ],
         "brandColor": "#FF3E01",
         "brandColorDark": "#FF5A00",
@@ -48,40 +46,40 @@
               "description": "List the services in an environment",
               "prompt": "What services are running in the production environment of my demo project?",
               "tools_triggered": "list-services",
-              "expected_behavior": "Lists the api (Docker, traefik/whoami) and Postgres services in demo/production with their status, both running."
+              "expected_behavior": "Lists the API and PostgreSQL services in demo/production with their service type, status, and compute allocation."
             },
             {
-              "description": "Check a service's health from its logs and metrics",
-              "prompt": "Is my api service in production healthy? Check its latest deployment logs and its CPU and memory over the last hour.",
-              "tools_triggered": "list-deployments, get-deployment-logs, get-service-metrics",
-              "expected_behavior": "Finds the active deployment, shows its log lines (including \"Starting up on port 80\"), reports CPU and memory as a share of the allocation, and concludes the service is running normally."
+              "description": "Inspect deployment status and resource usage",
+              "prompt": "Show my production API service's active deployment and its CPU and memory over the last hour.",
+              "tools_triggered": "list-deployments, get-service-metrics",
+              "expected_behavior": "Identifies the active deployment and its status. Summarizes CPU and memory usage against the allocation for the last hour or reports if there are no samples."
             },
             {
-              "description": "Deploy a container with a public URL",
-              "prompt": "Deploy nginx:alpine as a service called web in my staging environment and give it a public URL.",
-              "tools_triggered": "create-service, deploy-service, add-service-ingress",
-              "expected_behavior": "After confirmation, creates a Docker service named web from nginx:alpine in demo/staging, deploys it, adds HTTP ingress on port 80 and returns its https://…simplifyd.app URL."
+              "description": "Inspect the production API service",
+              "prompt": "What is the current status and compute allocation of my API service in demo production?",
+              "tools_triggered": "get-service",
+              "expected_behavior": "Reports the existing API service's status, vCPUs, memory, and replica count."
             },
             {
-              "description": "Publish a static site",
-              "prompt": "Publish a one-page static site that says Hello from Simplifyd to my staging environment.",
-              "tools_triggered": "deploy-static-site",
-              "expected_behavior": "Creates a static site in demo/staging with an index.html containing the greeting and returns its live URL."
+              "description": "Find the environments in the demo project",
+              "prompt": "List the environments in my demo project.",
+              "tools_triggered": "list-environments",
+              "expected_behavior": "Lists production and staging in the existing demo project."
             },
             {
-              "description": "Enable a Postgres extension",
-              "prompt": "Enable the pg_trgm extension on the Postgres database in my production environment.",
-              "tools_triggered": "list-postgres-extensions, enable-postgres-extension",
-              "expected_behavior": "Confirms pg_trgm is on the allowlist, installs it in the app database of the Postgres service in demo/production and reports it among the installed extensions."
+              "description": "List installed PostgreSQL extensions",
+              "prompt": "Which extensions are installed on my managed PostgreSQL service in demo production?",
+              "tools_triggered": "list-postgres-extensions",
+              "expected_behavior": "Reports the extensions installed on the app database and distinguishes them from the platform's supported extensions."
             }
           ],
           "negative": [
             {
-              "description": "Buying a domain. The hosted server offers no purchase tools: it can search and price domains, but buying happens in the Simplifyd console. ChatGPT should quote the price and point to the console rather than claim to have bought it.",
-              "prompt": "Buy the domain simplifyd-review-test.com for me."
+              "description": "Wallet funding and domain purchase are outside the listing's scope. No quote, checkout link, or purchase is produced.",
+              "prompt": "Top up my Simplifyd wallet and buy simplifyd-review-test.com for me."
             },
             {
-              "description": "Reading a database password. Secret values are never returned by any tool; variables are sealed or redacted. ChatGPT should explain it cannot reveal the password and that the user can reveal unsealed values in the console.",
+              "description": "Database passwords are outside the listing's scope. The plugin cannot reveal or request a password.",
               "prompt": "Show me the password for my production Postgres database."
             },
             {
@@ -90,12 +88,11 @@
             }
           ]
         },
-        "demo_recording_url": "REPLACE_WITH_DEMO_VIDEO_URL",
         "commerce": false,
-        "commerce_description": "The plugin sells nothing in ChatGPT. Services a user creates are billed to their existing Simplifyd Cloud workspace; topping up that workspace's wallet returns a link to Simplifyd's own checkout."
+        "commerce_description": "The listing inspects resources in existing accounts and verifies delegation for existing DNS zones. Its tools do not offer purchases, prices for new resources, wallet funding, checkout links, renewals, billable provisioning, or capacity increases."
       },
       "publication": {
-        "release_notes": "Initial release: deploy and manage Docker services, databases, static sites, DNS, variables and tokens on Simplifyd Cloud."
+        "release_notes": "The existing MCP URL now serves tools for existing services, deployments, metrics, PostgreSQL extension inventory, and domain and DNS status. The catalog excludes payment and provisioning flows, credential operations, raw logs, and registrant contact details. The DNS delegation check is annotated as a public write and requires confirmation."
       }
     }
   }

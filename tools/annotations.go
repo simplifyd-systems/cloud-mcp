@@ -19,7 +19,6 @@ import (
 
 // readOnlyTools only read. Calling one changes nothing a person would notice.
 var readOnlyTools = toolSet(
-	"check-dns-zone",
 	"get-deployment",
 	"get-deployment-logs",
 	"get-domain",
@@ -70,7 +69,6 @@ var readOnlyTools = toolSet(
 	"preview-registry-retention",
 	"quote-domain",
 	"search-domains",
-	"verify-email-domain",
 )
 
 // destructiveTools delete, overwrite, revoke access, or spend money. A tool
@@ -78,7 +76,9 @@ var readOnlyTools = toolSet(
 // be undone afterwards: a restored value is still one that was overwritten.
 var destructiveTools = toolSet(
 	"add-service-variable", // replaces an existing variable's value
+	"add-workspace-member", // can send an invitation email
 	"approve-service-changeset",
+	"check-dns-zone",         // activates the zone and can replace its served DNS records
 	"configure-mysql-backup", // an empty frequency turns backups off
 	"delete-dns-record",
 	"delete-dns-zone",
@@ -115,7 +115,9 @@ var destructiveTools = toolSet(
 	"update-member-role",
 	"update-postgres-parameters",
 	"update-registry-credential",
+	"update-service", // can replace or clear stored registry credentials
 	"update-service-config",
+	"update-service-volume", // renaming switches to a different volume
 )
 
 // additiveTools write, but only add or change something without losing what
@@ -132,7 +134,6 @@ var additiveTools = toolSet(
 	"add-static-site-domain",
 	"add-tcp-proxy",
 	"add-video-captions",
-	"add-workspace-member",
 	"create-env-variable",
 	"create-environment",
 	"create-postgres-backup",
@@ -148,10 +149,9 @@ var additiveTools = toolSet(
 	"login",
 	"update-environment",
 	"update-project",
-	"update-service", // stages a changeset; nothing changes until it is approved
-	"update-service-volume",
 	"update-workspace",
 	"upload-video",
+	"verify-email-domain", // records verification and enables sending from the domain
 )
 
 // openWorldTools reach beyond the caller's own workspace: they change what the
@@ -174,15 +174,19 @@ var openWorldTools = toolSet(
 	"create-postgres-backup",
 	"delete-dns-record",
 	"delete-dns-zone",
+	"delete-service", // tears down public routing when present
 	"delete-service-ingress",
 	"delete-tcp-proxy",
 	"deploy-service", // pulls the image from its registry
 	"deploy-static-site",
 	"fund-workspace", // a Paystack or Stripe payment link
+	"get-domain",     // reads nameservers and transfer-lock status from the registrar
 	"quote-domain",
 	"redeploy-service",
+	"register-domain",
 	"remove-email-domain",
 	"remove-static-site-domain",
+	"renew-domain",
 	"search-domains",
 	"set-ingress-source-ranges",
 	"set-static-site-domain",

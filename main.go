@@ -60,8 +60,6 @@ func main() {
 		Version: serverVersion,
 	}, nil)
 
-	// Only the auth group differs between transports: the login tool is
-	// local-only.
 	tools.RegisterAll(server, local)
 
 	if local {
@@ -90,14 +88,15 @@ func serveHTTP(server *mcp.Server) error {
 	// A token that expires mid-session still reaches the tools, which learn it
 	// from the API's 401. They answer with this challenge so the client can
 	// re-authorize instead of showing a dead end.
-	tools.SetAuthChallenge(challengeValue(
+	tools.SetAuthChallenge(generalResource().challengeValue(
 		"invalid_token", "Your Simplifyd Cloud sign-in has expired. Reconnect to continue.",
 	))
 
-	mux := newMux(mcp.NewStreamableHTTPHandler(
-		func(*http.Request) *mcp.Server { return server },
-		&mcp.StreamableHTTPOptions{Stateless: true},
+	openAI := mcp.NewServer(&mcp.Implementation{Name: serverName, Version: serverVersion}, nil)
+	tools.RegisterOpenAITools(openAI, openAIResource().challengeValue(
+		"invalid_token", "Your Simplifyd Cloud sign-in has expired. Reconnect to continue.",
 	))
+	mux := newMux(streamable(server), streamable(openAI))
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -112,10 +111,16 @@ func serveHTTP(server *mcp.Server) error {
 	return srv.ListenAndServe()
 }
 
-// newMux wires the HTTP routes. Split out from serveHTTP so the routing can be
-// tested: the MCP endpoint is mounted at "/", which is a ServeMux catch-all,
-// and it must not swallow the health probe or the OAuth metadata documents.
-func newMux(mcpHandler http.Handler) *http.ServeMux {
+func streamable(server *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(
+		func(*http.Request) *mcp.Server { return server },
+		&mcp.StreamableHTTPOptions{Stateless: true},
+	)
+}
+
+// newMux keeps the existing OpenAI app at the origin and the general catalog
+// at /mcp, with distinct OAuth discovery and audiences.
+func newMux(mcpHandler, openAIHandler http.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -124,17 +129,11 @@ func newMux(mcpHandler http.Handler) *http.ServeMux {
 	})
 	registerOAuthMetadata(mux)
 
-	// Served at the root as well as /mcp, so a client can be configured with
-	// the bare origin (https://mcp.simplifyd.com). /mcp stays mounted for
-	// clients already configured with it.
-	//
-	// The patterns registered above are more specific than "/" and still win,
-	// so the unauthenticated metadata fetch a client makes after being
-	// challenged here keeps working.
-	endpoint := checkOrigin(requireAuth(mcpHandler))
-	mux.Handle("/", endpoint)
+	endpoint := checkOrigin(generalResource().requireAuth(mcpHandler, false))
+	mux.Handle("/{$}", checkOrigin(openAIResource().requireAuth(openAIHandler, true)))
 	mux.Handle("/mcp", endpoint)
-	mux.Handle("/mcp/", endpoint)
+	mux.Handle("/mcp/{$}", endpoint)
+	mux.Handle(legacyListingPath, checkOrigin(legacyListingResource().requireAuth(openAIHandler, true)))
 
 	return mux
 }

@@ -125,7 +125,7 @@ func RegisterEmailTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name: "verify-email-domain",
-		Description: "Check an email domain's DNS records now. Once verified, services in the environment can " +
+		Description: "Check an email domain's DNS records now and persist a successful verification. Once verified, services in the environment can " +
 			"send from it over SMTP or Why.email's API with the email service's variables — SMTP_HOST, " +
 			"SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, WHY_EMAIL_API_KEY and WHY_EMAIL_API_URL, referenced as " +
 			"${{<email service name>.<variable>}}. Sending is billed at 50 kobo per email delivered.",

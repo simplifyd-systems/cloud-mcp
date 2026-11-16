@@ -101,7 +101,7 @@ func handleListDNSZones(ctx context.Context, req *mcp.CallToolRequest, args work
 		return customerErr("list DNS zones", err), nil, nil
 	}
 	if len(list.Zones) == 0 {
-		return text("This workspace hosts no DNS zones. Add one with add-dns-zone, or buy a domain through Simplifyd Cloud, which comes with its zone."), nil, nil
+		return text("This workspace hosts no DNS zones."), nil, nil
 	}
 	var b strings.Builder
 	for i := range list.Zones {
@@ -129,17 +129,19 @@ func handleCheckDNSZone(ctx context.Context, req *mcp.CallToolRequest, args dnsZ
 	if !ok {
 		return r, nil, nil
 	}
-	dns := api.Workspace(args.Workspace).DNS()
-	zone, err := findZone(ctx, dns, args.Zone)
+	zone, err := checkDNSZone(ctx, api.Workspace(args.Workspace).DNS(), args.Zone)
 	if err != nil {
 		return customerErr("check DNS zone", err), nil, nil
 	}
-	if zone.Status != cloud.DNSZoneActive {
-		if zone, err = dns.CheckZone(ctx, zone.Slug); err != nil {
-			return customerErr("check DNS zone", err), nil, nil
-		}
-	}
 	return text(describeZone(zone)), nil, nil
+}
+
+func checkDNSZone(ctx context.Context, dns *cloud.DNSClient, ref string) (*cloud.DNSZone, error) {
+	zone, err := findZone(ctx, dns, ref)
+	if err != nil || zone.Status == cloud.DNSZoneActive {
+		return zone, err
+	}
+	return dns.CheckZone(ctx, zone.Slug)
 }
 
 func handleDeleteDNSZone(ctx context.Context, req *mcp.CallToolRequest, args dnsZoneArgs) (*mcp.CallToolResult, any, error) {
@@ -285,7 +287,7 @@ func RegisterDNSTools(s *mcp.Server) {
 
 	addTool(s, &mcp.Tool{
 		Name:        "check-dns-zone",
-		Description: "Check now whether a pending zone's domain points at Simplifyd Cloud's nameservers yet, and report its status.",
+		Description: "Look up the domain's public nameservers. If a pending zone is delegated to Simplifyd Cloud, activate it and publish its stored records, replacing any records left on the Simplifyd nameservers for that zone.",
 	}, handleCheckDNSZone)
 
 	addTool(s, &mcp.Tool{
