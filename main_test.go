@@ -15,12 +15,9 @@ var stubMCP = http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write([]byte("mcp"))
 })
 
-// TestMuxRoutingUnauthenticated pins the boundary between the "/" catch-all and
-// the endpoints that must stay reachable without credentials. If the catch-all
-// ever swallows them, a client can never discover how to authenticate and the
-// health probe fails the pod.
+// OAuth discovery and the health probe must stay reachable without credentials.
 func TestMuxRoutingUnauthenticated(t *testing.T) {
-	mux := newMux(stubMCP)
+	mux := newMux(stubMCP, stubMCP)
 
 	for _, tc := range []struct {
 		path       string
@@ -34,7 +31,9 @@ func TestMuxRoutingUnauthenticated(t *testing.T) {
 		{"/", http.MethodPost, http.StatusUnauthorized, "bare origin is the MCP endpoint"},
 		{"/mcp", http.MethodPost, http.StatusUnauthorized, "explicit path still mounted"},
 		{"/mcp/", http.MethodPost, http.StatusUnauthorized, "trailing slash still mounted"},
-		{"/anything-else", http.MethodPost, http.StatusUnauthorized, "catch-all challenges rather than 404s"},
+		{"/openai", http.MethodPost, http.StatusUnauthorized, "the OpenAI endpoint has its own OAuth challenge"},
+		{"/openai/", http.MethodPost, http.StatusNotFound, "the OpenAI endpoint never falls back to the general server"},
+		{"/anything-else", http.MethodPost, http.StatusNotFound, "only registered paths serve tools"},
 	} {
 		t.Run(strings.TrimPrefix(tc.path, "/"), func(t *testing.T) {
 			rec := httptest.NewRecorder()
@@ -52,7 +51,7 @@ func TestChallengeCarriesResourceMetadata(t *testing.T) {
 	t.Setenv("MCP_RESOURCE_URL", "https://mcp.example.com")
 
 	rec := httptest.NewRecorder()
-	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", nil))
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", nil))
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
@@ -67,11 +66,11 @@ func TestChallengeCarriesResourceMetadata(t *testing.T) {
 }
 
 func TestAuthenticatedRequestReachesMCPHandler(t *testing.T) {
-	for _, path := range []string{"/", "/mcp"} {
+	for _, path := range []string{"/mcp", "/mcp/"} {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, path, nil)
 		req.Header.Set("Authorization", "Bearer a-token")
-		newMux(stubMCP).ServeHTTP(rec, req)
+		newMux(stubMCP, stubMCP).ServeHTTP(rec, req)
 
 		if rec.Code != http.StatusOK || rec.Body.String() != "mcp" {
 			t.Fatalf("POST %s = %d %q, want 200 \"mcp\"", path, rec.Code, rec.Body.String())
@@ -84,7 +83,7 @@ func TestProtectedResourceDocument(t *testing.T) {
 	t.Setenv("MCP_AUTHORIZATION_SERVER", "https://api.example.com")
 
 	rec := httptest.NewRecorder()
-	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil))
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil))
 
 	var doc struct {
 		Resource             string   `json:"resource"`
@@ -93,7 +92,7 @@ func TestProtectedResourceDocument(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&doc); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if doc.Resource != "https://mcp.example.com" {
+	if doc.Resource != "https://mcp.example.com/" {
 		t.Errorf("resource = %q", doc.Resource)
 	}
 	if len(doc.AuthorizationServers) != 1 || doc.AuthorizationServers[0] != "https://api.example.com" {
@@ -109,7 +108,7 @@ func TestBrowserNavigationRedirectsToLandingPage(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
-	newMux(stubMCP).ServeHTTP(rec, req)
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusFound {
 		t.Fatalf("status = %d, want 302", rec.Code)
@@ -143,7 +142,7 @@ func TestMCPClientsAreNeverRedirected(t *testing.T) {
 			if tc.accept != "" {
 				req.Header.Set("Accept", tc.accept)
 			}
-			newMux(stubMCP).ServeHTTP(rec, req)
+			newMux(stubMCP, stubMCP).ServeHTTP(rec, req)
 
 			if rec.Code != http.StatusUnauthorized {
 				t.Fatalf("status = %d, want 401 (a redirect would break discovery)", rec.Code)
@@ -162,7 +161,7 @@ func TestCrossOriginRequestRefused(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/", nil)
 	req.Header.Set("Origin", "https://evil.example")
 	req.Header.Set("Authorization", "Bearer a-token")
-	newMux(stubMCP).ServeHTTP(rec, req)
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("status = %d, want 403 for a disallowed origin", rec.Code)
@@ -173,14 +172,14 @@ func TestCrossOriginRequestRefused(t *testing.T) {
 // body to the token it issued, byte for byte.
 func TestOpenAIAppsChallenge(t *testing.T) {
 	rec := httptest.NewRecorder()
-	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("unconfigured challenge status = %d, want 404", rec.Code)
 	}
 
 	t.Setenv("OPENAI_APPS_CHALLENGE", "tok_123\n")
 	rec = httptest.NewRecorder()
-	newMux(stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
+	newMux(stubMCP, stubMCP).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/.well-known/openai-apps-challenge", nil))
 	if rec.Code != http.StatusOK || rec.Body.String() != "tok_123" {
 		t.Fatalf("challenge = %d %q, want 200 %q", rec.Code, rec.Body.String(), "tok_123")
 	}

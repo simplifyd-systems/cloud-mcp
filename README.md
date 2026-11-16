@@ -32,6 +32,12 @@ fails if a tool is added without one.
 
 ## Directory listings
 
+The public OpenAI listing connects to `https://mcp.simplifyd.com/` using
+OAuth. It provides inventory and diagnostics for existing resources and a
+confirmed DNS delegation check. See `openai-plugin/README.md` for the catalog
+and submission steps. General hosted clients use `https://mcp.simplifyd.com/mcp`.
+If an OAuth client was connected to the root URL, update its URL and sign in again.
+
 `server.json` describes the hosted server for the
 [MCP Registry](https://registry.modelcontextprotocol.io), which registry-aware
 clients such as Lovable browse. Bump its `version` with each release and publish
@@ -53,8 +59,7 @@ go build -o cloud-mcp .
 | `SIMPLIFYD_API_URL` | `https://api.cloud.simplifyd.com` | API base URL |
 | `OPENAI_APPS_CHALLENGE` | *(none)* | Domain verification token from OpenAI's plugin portal, served at `/.well-known/openai-apps-challenge` (http only) |
 
-Under HTTP the MCP endpoint answers on the bare origin and on `/mcp`, with
-a plain `/healthz` for probes.
+The hosted server exposes `/healthz` for probes.
 Sessions are stateless, so replicas need no sticky routing.
 
 ## Authentication
@@ -123,7 +128,7 @@ Point a client at it, passing your API token as a header:
   "mcpServers": {
     "simplifyd-cloud": {
       "type": "http",
-      "url": "https://mcp.simplifyd.com",
+      "url": "https://mcp.simplifyd.com/mcp",
       "headers": {
         "Authorization": "Bearer your-jwt-token"
       }

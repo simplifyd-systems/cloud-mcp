@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,6 +9,13 @@ import (
 	"os"
 	"strings"
 )
+
+const legacyListingPath = "/openai"
+
+type oauthResource struct {
+	url         string
+	metadataURL string
+}
 
 // This file makes the hosted server an OAuth 2.1 protected resource, which is
 // what turns "paste an API token into your config" into a Connect button.
@@ -35,6 +43,21 @@ func resourceURL() string {
 	return "https://mcp.simplifyd.com"
 }
 
+func generalResource() oauthResource {
+	url := resourceURL()
+	return oauthResource{url + "/mcp", url + "/.well-known/oauth-protected-resource/mcp"}
+}
+
+func openAIResource() oauthResource {
+	url := resourceURL()
+	return oauthResource{url + "/", url + "/.well-known/oauth-protected-resource"}
+}
+
+func legacyListingResource() oauthResource {
+	url := resourceURL()
+	return oauthResource{url + legacyListingPath, url + "/.well-known/oauth-protected-resource" + legacyListingPath}
+}
+
 // authorizationServer is the issuer that mints tokens for this resource.
 func authorizationServer() string {
 	if url := os.Getenv("MCP_AUTHORIZATION_SERVER"); url != "" {
@@ -48,18 +71,19 @@ func authorizationServer() string {
 // The path is fixed by the spec: a client derives it from the origin of the
 // URL it was configured with, so it cannot be served anywhere else.
 func registerOAuthMetadata(mux *http.ServeMux) {
-	mux.HandleFunc("/.well-known/oauth-protected-resource", protectedResource)
+	mux.HandleFunc("/.well-known/oauth-protected-resource", openAIResource().protectedResource)
 	// Clients that were given the full endpoint URL rather than the origin look
 	// for the document under that path instead.
-	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", protectedResource)
+	mux.HandleFunc("/.well-known/oauth-protected-resource/mcp", generalResource().protectedResource)
+	mux.HandleFunc("/.well-known/oauth-protected-resource"+legacyListingPath, legacyListingResource().protectedResource)
 	mux.HandleFunc("/.well-known/openai-apps-challenge", openAIAppsChallenge)
 }
 
-func protectedResource(w http.ResponseWriter, _ *http.Request) {
+func (resource oauthResource) protectedResource(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "public, max-age=3600")
 	_ = json.NewEncoder(w).Encode(map[string]any{
-		"resource":                 resourceURL(),
+		"resource":                 resource.url,
 		"authorization_servers":    []string{authorizationServer()},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         []string{"identity", "workspace", "offline_access"},
@@ -74,20 +98,62 @@ func protectedResource(w http.ResponseWriter, _ *http.Request) {
 // saying "not authenticated" is a successful HTTP response, and the client has
 // no reason to look for a way to authenticate. Only a 401 carrying
 // WWW-Authenticate does that.
-func requireAuth(next http.Handler) http.Handler {
+func (resource oauthResource) requireAuth(next http.Handler, openAI bool) http.Handler {
+	rootAudience := resourceURL()
+	legacyAudience := legacyListingResource().url
+	issuer := authorizationServer()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if bearerFromHeader(r.Header.Get("Authorization")) == "" {
+		token := bearerFromHeader(r.Header.Get("Authorization"))
+		if token == "" {
 			// A person who typed the URL into a browser gets the page that
 			// explains what this is; a client gets the challenge it needs.
 			if isBrowserNavigation(r) {
 				http.Redirect(w, r, landingURL(), http.StatusFound)
 				return
 			}
-			challenge(w, "", "authentication required")
+			resource.challenge(w, "", "authentication required")
+			return
+		}
+		claims := readOAuthClaims(token)
+		audience := strings.TrimSuffix(claims.Audience, "/")
+		listingToken := audience == rootAudience || audience == legacyAudience
+		if openAI && (claims.Use != "oauth_access" || !listingToken || claims.Issuer != issuer) {
+			resource.challenge(w, "invalid_token", "sign in to the Simplifyd Cloud listing")
+			return
+		}
+		if !openAI && claims.Use == "oauth_access" && audience != resource.url {
+			resource.challenge(w, "invalid_token", "this token is scoped to the Simplifyd Cloud listing")
 			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+type oauthClaims struct {
+	Use      string `json:"token_use"`
+	Audience string `json:"aud"`
+	Issuer   string `json:"iss"`
+}
+
+// The signed Simplifyd OAuth access token has a single string audience. These
+// claims only restrict which MCP route may receive it. The Cloud API still
+// verifies the token signature, expiry, grant and workspace permissions for
+// every tool operation before returning data or making changes.
+func readOAuthClaims(token string) oauthClaims {
+	_, rest, _ := strings.Cut(token, ".")
+	payload, signature, found := strings.Cut(rest, ".")
+	if !found || signature == "" {
+		return oauthClaims{}
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(payload)
+	if err != nil {
+		return oauthClaims{}
+	}
+	var claims oauthClaims
+	if json.Unmarshal(decoded, &claims) != nil {
+		return oauthClaims{}
+	}
+	return claims
 }
 
 // landingURL is the human-facing page describing this server.
@@ -123,8 +189,8 @@ func isBrowserNavigation(r *http.Request) bool {
 }
 
 // challenge writes a 401 pointing the client at our metadata document.
-func challenge(w http.ResponseWriter, errCode, description string) {
-	w.Header().Set("WWW-Authenticate", challengeValue(errCode, description))
+func (resource oauthResource) challenge(w http.ResponseWriter, errCode, description string) {
+	w.Header().Set("WWW-Authenticate", resource.challengeValue(errCode, description))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_ = json.NewEncoder(w).Encode(map[string]string{
@@ -135,10 +201,9 @@ func challenge(w http.ResponseWriter, errCode, description string) {
 }
 
 // challengeValue is the WWW-Authenticate value naming our metadata document.
-func challengeValue(errCode, description string) string {
+func (resource oauthResource) challengeValue(errCode, description string) string {
 	params := fmt.Sprintf(
-		`Bearer resource_metadata="%s/.well-known/oauth-protected-resource"`,
-		resourceURL(),
+		`Bearer resource_metadata="%s"`, resource.metadataURL,
 	)
 	if errCode != "" {
 		params += fmt.Sprintf(`, error="%s"`, errCode)
