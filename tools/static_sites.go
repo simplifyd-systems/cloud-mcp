@@ -40,7 +40,7 @@ type deployStaticSiteArgs struct {
 	Prune       *bool  `json:"prune,omitempty" jsonschema:"Remove files not in this request or archive, making the publish a full replace. Default true. Set false to patch individual files."`
 	// Domains are applied before the deploy so a single call can take a new
 	// site all the way to serving on the caller's own hostnames.
-	Domain        string   `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on, added alongside any it already has. Requires a CNAME pointing at the returned domain_cname_target, unless the domain is in a zone the workspace hosts here, when it is added automatically."`
+	Domain        string   `json:"domain,omitempty"         jsonschema:"Optional custom domain to serve the site on, added alongside any it already has. It is not served until it is verified: the result's next_step gives the TXT record to publish and the CNAME to point at domain_cname_target, unless the domain is in a zone the workspace hosts here, when its records are added automatically."`
 	Domains       []string `json:"domains,omitempty"        jsonschema:"Optional custom domains to serve the site on, e.g. both example.com and www.example.com. Added alongside any the site already has, with the same DNS requirements as domain."`
 	IndexDocument string   `json:"index_document,omitempty" jsonschema:"Object served for a directory request, default index.html"`
 	ErrorDocument string   `json:"error_document,omitempty" jsonschema:"Object served when nothing matches. Point it at the index document for a client-side router."`
@@ -161,8 +161,8 @@ func requestedDomains(domain string, domains []string) []string {
 	return out
 }
 
-// domainSummaries describes each of names as the site now has it, with the
-// step the user has left to take for its DNS.
+// domainSummaries describes each of names as the site now has it, with its
+// verification and the step the user has left to take for its DNS.
 func domainSummaries(site *cloud.StaticSite, names []string) []map[string]any {
 	out := make([]map[string]any, 0, len(names))
 	for _, name := range names {
@@ -170,24 +170,14 @@ func domainSummaries(site *cloud.StaticSite, names []string) []map[string]any {
 		if d == nil {
 			continue
 		}
-		entry := map[string]any{"domain": d.Domain, "status": d.Status}
-		if d.DNSZone != "" && d.DNSError == "" {
-			// The domain is in a zone the workspace hosts with us, so its
-			// record was written for it; telling the user to add one would be
-			// wrong.
-			entry["dns_zone"] = d.DNSZone
-			entry["next_step"] = fmt.Sprintf(
-				"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
-				d.Domain, d.DNSZone)
-		} else {
-			if d.DNSError != "" {
-				entry["dns_error"] = d.DNSError
-			}
-			entry["next_step"] = fmt.Sprintf(
-				"point a CNAME for %s at %s; the site serves on %s until DNS propagates",
-				d.Domain, site.DomainCNAMETarget, site.DefaultURL)
+		meanwhile := ""
+		if site.DefaultURL != "" {
+			meanwhile = "the site serves on " + site.DefaultURL
 		}
-		out = append(out, entry)
+		out = append(out, domainStep{
+			Domain: d.Domain, CNAMETarget: site.DomainCNAMETarget, Zone: d.DNSZone, DNSError: d.DNSError,
+			Verification: d.Verification, Meanwhile: meanwhile,
+		}.summary(d.Status))
 	}
 	return out
 }
@@ -634,8 +624,10 @@ func RegisterStaticSiteTools(s *mcp.Server, local bool) {
 	}, handleCreateStaticSiteUpload)
 
 	addTool(s, &mcp.Tool{
-		Name:        "get-static-site",
-		Description: "Get a static site's configuration, serving URLs, custom domains with their status, and storage usage.",
+		Name: "get-static-site",
+		Description: "Get a static site's configuration, serving URLs, custom domains with their status and verification, " +
+			"and storage usage. A custom domain whose verification status is pending is not served until the TXT " +
+			"record in its verification is published (see verify-domain).",
 	}, handleGetStaticSite)
 
 	addTool(s, &mcp.Tool{
@@ -656,8 +648,9 @@ func RegisterStaticSiteTools(s *mcp.Server, local bool) {
 		Name: "add-static-site-domain",
 		Description: "Serve a static site on one more custom domain, alongside any it already has — a site can " +
 			"have up to 20, e.g. both example.com and www.example.com. Deploys the site so routing takes effect. " +
-			"The result says, for the domain, whether its DNS record was added automatically (it is in a zone " +
-			"the workspace hosts here) or which CNAME target it must point at.",
+			"The domain is not served until it is verified: the result's next_step gives the TXT record to publish " +
+			"and the CNAME target to point it at, unless it is in a zone the workspace hosts here, when its records " +
+			"are added automatically. Pass next_step on to the user, then call verify-domain once the record is published.",
 	}, handleAddStaticSiteDomain)
 
 	addTool(s, &mcp.Tool{
@@ -670,6 +663,7 @@ func RegisterStaticSiteTools(s *mcp.Server, local bool) {
 		Name: "set-static-site-domain",
 		Description: "Add a custom domain to a static site alongside any it already has, or detach every custom " +
 			"domain by passing an empty domain. Prefer add-static-site-domain and remove-static-site-domain. " +
-			"Deploys the site so routing takes effect, and returns the CNAME target the domain must point at.",
+			"Deploys the site so routing takes effect. The domain is not served until it is verified: the result " +
+			"gives the TXT record to publish and the CNAME target it must point at.",
 	}, handleSetStaticSiteDomain)
 }

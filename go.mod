@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	github.com/simplifyd-systems/cloud-go-sdk v0.1.41
+	github.com/simplifyd-systems/cloud-go-sdk v0.1.42
 )
 
 require (
