@@ -312,23 +312,18 @@ func handleSetVideoDomain(
 		"domain_cname_target": lib.DomainCNAMETarget,
 		"playback_url":        lib.PlaybackURL,
 	}
-	switch {
-	case lib.PlaybackDomain == "":
-	case lib.DNSZone != "" && lib.DNSError == "":
-		// The domain is in a zone the workspace hosts with us, so its record
-		// was written for it; telling the user to add one would be wrong.
-		out["dns_zone"] = lib.DNSZone
-		out["next_step"] = fmt.Sprintf(
-			"nothing to do: %s is in the workspace's %s zone, so its DNS record was added automatically",
-			lib.PlaybackDomain, lib.DNSZone)
-	default:
-		if lib.DNSError != "" {
-			out["dns_error"] = lib.DNSError
+	if lib.PlaybackDomain != "" {
+		step := domainStep{
+			Domain: lib.PlaybackDomain, CNAMETarget: lib.DomainCNAMETarget, Zone: lib.DNSZone, DNSError: lib.DNSError,
+			Verification: lib.Verification,
+			Meanwhile: "playback continues on the platform hostname, which is on the same zero-rated address, " +
+				"so nothing is metered in the meantime",
 		}
-		out["next_step"] = fmt.Sprintf(
-			"point a CNAME for %s at %s; playback continues on the platform hostname until DNS propagates, "+
-				"which is on the same zero-rated address, so nothing is metered in the meantime",
-			lib.PlaybackDomain, lib.DomainCNAMETarget)
+		for k, v := range step.summary("") {
+			if k != "domain" {
+				out[k] = v
+			}
+		}
 	}
 	return jsonText(out), nil, nil
 }
@@ -415,6 +410,9 @@ func registerVideoLibraryTools(s *mcp.Server) {
 	addTool(s, &mcp.Tool{
 		Name: "set-video-playback-domain",
 		Description: "Serve a video library's playback on a custom hostname, or detach the current one by passing " +
-			"an empty domain. Returns the CNAME target the domain must point at.",
+			"an empty domain. The domain is not served until it is verified: the result's next_step gives the TXT " +
+			"record to publish and the CNAME target to point it at, unless it is in a zone the workspace hosts here, " +
+			"when its records are added automatically. Pass next_step on to the user, then call verify-domain once " +
+			"the record is published.",
 	}, handleSetVideoDomain)
 }

@@ -601,7 +601,7 @@ type addIngressArgs struct {
 	Project    string `json:"project"               jsonschema:"Project slug or name"`
 	Env        string `json:"env"                   jsonschema:"Environment slug or name"`
 	Service    string `json:"service"               jsonschema:"Service slug or name"`
-	CustomFQDN string `json:"custom_fqdn,omitempty" jsonschema:"Custom fully qualified domain name (leave empty for auto-generated subdomain)"`
+	CustomFQDN string `json:"custom_fqdn,omitempty" jsonschema:"Custom fully qualified domain name (leave empty for auto-generated subdomain). It is not routed until verified with the TXT record the result gives."`
 	Port       int    `json:"port,omitempty"        jsonschema:"Container port to route traffic to"`
 	Protocol   string `json:"protocol,omitempty"    jsonschema:"Protocol: http (default) or grpc"`
 }
@@ -619,7 +619,8 @@ func handleAddServiceIngress(
 	if protocol == "" {
 		protocol = "http"
 	}
-	ingress, err := services(api, args.Workspace, args.Project, args.Env).Ingress(args.Service).Add(ctx, cloud.AddIngressInput{
+	svcs := services(api, args.Workspace, args.Project, args.Env)
+	ingress, err := svcs.Ingress(args.Service).Add(ctx, cloud.AddIngressInput{
 		Protocol:   protocol,
 		Port:       args.Port,
 		CustomFQDN: args.CustomFQDN,
@@ -627,7 +628,54 @@ func handleAddServiceIngress(
 	if err != nil {
 		return apiErr("add service ingress", err), nil, nil
 	}
-	return jsonText(ingress), nil, nil
+	if strings.TrimSpace(args.CustomFQDN) == "" {
+		return jsonText(ingress), nil, nil
+	}
+	out := ingressResult{IngressPort: ingress}
+	if f := addedFQDN(ctx, svcs, args.Service, ingress, args.CustomFQDN); f != nil {
+		out.Verification = f.Verification
+		out.NextStep = domainStep{
+			Domain: f.FQDN, CNAMETarget: f.CNAME, Zone: f.DNSZone, Verification: f.Verification,
+		}.nextStep()
+	}
+	return jsonText(out), nil, nil
+}
+
+// ingressResult is the port a custom domain was added to, with what the user
+// has left to do before the domain is routed.
+type ingressResult struct {
+	*cloud.IngressPort
+	// Verification is the added domain's; it is also on the domain's entry in
+	// custom_fqdns.
+	Verification *cloud.DomainVerification `json:"verification,omitempty"`
+	NextStep     string                    `json:"next_step,omitempty"`
+}
+
+// addedFQDN finds the custom domain just added: on the port Add returned, or
+// else by reading the service again. Nil when it cannot be found, which only
+// costs the next step.
+func addedFQDN(ctx context.Context, svcs *cloud.ServicesClient, svcSlug string, port *cloud.IngressPort, name string) *cloud.FQDN {
+	name = strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".")
+	find := func(ports []cloud.IngressPort) *cloud.FQDN {
+		for _, p := range ports {
+			for i, f := range p.CustomFQDNs {
+				if strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(f.FQDN), "."), name) {
+					return &p.CustomFQDNs[i]
+				}
+			}
+		}
+		return nil
+	}
+	if port != nil {
+		if f := find([]cloud.IngressPort{*port}); f != nil {
+			return f
+		}
+	}
+	svc, err := svcs.Get(ctx, svcSlug)
+	if err != nil {
+		return nil
+	}
+	return find(svc.Ingress)
 }
 
 // ---- delete-service-ingress ----
@@ -1137,7 +1185,9 @@ func RegisterServiceTools(s *mcp.Server) {
 		Description: "Create an HTTP/gRPC ingress rule for a service (exposes it via a public URL on Cloudflare DNS). " +
 			"A custom_fqdn in a DNS zone the workspace hosts here (see list-dns-zones) gets its DNS record added automatically: " +
 			"its entry in the result then has dns_zone set, and no record should be added by hand. " +
-			"Otherwise the user must point a CNAME for it at the returned cname.",
+			"Otherwise the user must point a CNAME for it at the returned cname. Either way the domain is not routed " +
+			"until it is verified: the result's next_step gives the TXT record to publish. Pass next_step on to the " +
+			"user, then call verify-domain once the record is published.",
 	}, handleAddServiceIngress)
 
 	addTool(s, &mcp.Tool{

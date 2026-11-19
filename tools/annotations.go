@@ -99,10 +99,12 @@ var destructiveTools = toolSet(
 	"register-domain",  // paid from the wallet
 	"remove-email-domain",
 	"remove-registry-credential",
+	"remove-bucket-domain",
 	"remove-static-site-domain",
 	"remove-workspace-member",
 	"renew-domain", // paid from the wallet
 	"revoke-private-service-access",
+	"set-bucket-public-access", // can expose a bucket's files, or break links to them
 	"set-ingress-source-ranges",
 	"set-registry-retention-enabled", // enabling deletes tags on the next run
 	"set-service-variables",
@@ -129,6 +131,7 @@ var additiveTools = toolSet(
 	"add-registry-credential",
 	"add-service-config",
 	"add-service-ingress",
+	"add-bucket-domain",
 	"add-service-volume",
 	"add-shared-variable",
 	"add-static-site-domain",
@@ -151,6 +154,7 @@ var additiveTools = toolSet(
 	"update-project",
 	"update-workspace",
 	"upload-video",
+	"verify-domain",       // records verification and puts the domain live
 	"verify-email-domain", // records verification and enables sending from the domain
 )
 
@@ -163,6 +167,7 @@ var additiveTools = toolSet(
 var openWorldTools = toolSet(
 	"add-dns-record",
 	"add-dns-zone",
+	"add-bucket-domain",
 	"add-email-domain",
 	"add-service-ingress", // registers the public hostname with Cloudflare
 	"add-static-site-domain",
@@ -184,16 +189,19 @@ var openWorldTools = toolSet(
 	"quote-domain",
 	"redeploy-service",
 	"register-domain",
+	"remove-bucket-domain",
 	"remove-email-domain",
 	"remove-static-site-domain",
 	"renew-domain",
 	"search-domains",
+	"set-bucket-public-access", // changes what the public internet can read
 	"set-ingress-source-ranges",
 	"set-static-site-domain",
 	"set-video-playback-domain",
 	"undeploy-service",
 	"update-dns-record",
 	"update-domain", // changes the registrar's renewal and lock settings
+	"verify-domain", // looks the TXT record up in public DNS
 	"verify-email-domain",
 )
 
@@ -261,6 +269,8 @@ func RegisterAll(s *mcp.Server, local bool) {
 	RegisterRegistryRetentionTools(s)
 	RegisterRegistryCredentialTools(s)
 	RegisterStaticSiteTools(s, local)
+	RegisterBucketTools(s)
+	RegisterDomainVerificationTools(s)
 	RegisterVideoTools(s, local)
 	RegisterEmailTools(s)
 	RegisterDomainTools(s, local)
